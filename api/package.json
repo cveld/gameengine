@@ -2,9 +2,9 @@
   "name": "",
   "version": "",
   "scripts": {
-    "build": "tsc",
     "build:production": "npm run prestart && npm prune --production",
-    "watch": "tsc --w",
+    "watch": "webpack --config webpack/webpack.dev.js --watch",
+    "build": "webpack --config webpack/webpack.prod.js",
     "prestart": "npm run build && func extensions install",
     "start:host": "func start",
     "start": "npm-run-all --parallel start:host watch",
@@ -14,6 +14,8 @@
   "devDependencies": {
     "@azure/functions": "^1.0.1-beta1",
     "npm-run-all": "^4.1.5",
-    "typescript": "^3.3.3"
+    "ts-loader": "^9.2.4",
+    "typescript": "^3.3.3",
+    "webpack-cli": "^4.7.2"
   }
 }
