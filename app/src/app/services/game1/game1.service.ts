@@ -6,9 +6,10 @@ export class Game1Service {
 
   constructor(private signalr: SignalrService) {
     this.randomvalue = Math.random();
-    this.signalr.addHandler('join', this.joinGame);
+    this.signalr.addHandler('join', () => this.joinGame());
   }
 
+  messages: string[] = [];
   value?: string;
   randomvalue: Number;
   setValue(value: string) {
@@ -21,6 +22,7 @@ export class Game1Service {
 
   joinGame() {
     console.log('join game');
+    this.messages.push('join game');
   }
 
 }

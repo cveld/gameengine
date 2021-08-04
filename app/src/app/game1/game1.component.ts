@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { Game1Service } from '../services/game1/game1.service';
 import { SignalrService } from '../services/signalr/SignalrService';
 import { IStateConsumer } from '../shared/IStateConsumer';
 
@@ -12,8 +13,10 @@ export class Game1Component implements OnInit, IStateConsumer {
   constructor() {
     this.value = Math.random();
   }
-  setState: (state: any) => void = (state) => {
+  game1Service?: Game1Service;
+  setState: (state: Game1Service) => void = (state) => {
     this.value = state.randomvalue;
+    this.game1Service = state;
   }
 
   ngOnInit(): void {
