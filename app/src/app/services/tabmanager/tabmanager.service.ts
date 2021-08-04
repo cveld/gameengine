@@ -8,7 +8,7 @@ import { ITab } from '../../shared/ITab';
 export class TabManagerService {
   tabs$: BehaviorSubject<ReadonlyArray<ITab>> = new BehaviorSubject<ReadonlyArray<ITab>>([]);
   constructor() { }
-  addTab(title: string) {
-    this.tabs$.next(this.tabs$.value.concat({title: title}));
+  addTab(tab: ITab) {
+    this.tabs$.next(this.tabs$.value.concat(tab));
   }
 }

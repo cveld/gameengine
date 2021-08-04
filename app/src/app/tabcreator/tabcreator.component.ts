@@ -1,5 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, ComponentFactoryResolver, OnInit, ViewContainerRef } from '@angular/core';
+import { GameService } from '../services/game/game.service';
+import { PlayerService } from '../services/player/player.service';
 import { TabManagerService } from '../services/tabmanager/tabmanager.service';
+import { ITab } from '../shared/ITab';
 
 @Component({
   selector: 'app-tabcreator',
@@ -8,17 +11,27 @@ import { TabManagerService } from '../services/tabmanager/tabmanager.service';
 })
 export class TabcreatorComponent implements OnInit {
 
-  constructor(private tabManagerService: TabManagerService) { }
+  constructor(
+    private tabManagerService: TabManagerService,
+    private componentFactoryResolver: ComponentFactoryResolver,
+    private gameService: GameService,
+    private playerService: PlayerService,
+    private viewContainerRef: ViewContainerRef
+  ) { }
 
   ngOnInit(): void {
   }
 
   createGameClicked() {
-    this.tabManagerService.addTab('game');
+    // let resolver = this.componentFactoryResolver.resolveComponentFactory(GameComponent);
+    // this.viewContainerRef.createComponent(resolver);
+    const tab = this.gameService.createGame();
+    this.tabManagerService.addTab(tab);
   }
 
   createPlayerClicked() {
-    this.tabManagerService.addTab('player');
+    const tab = this.playerService.createPlayer();
+    this.tabManagerService.addTab(tab);
   }
 
 }
