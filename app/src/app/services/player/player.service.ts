@@ -1,6 +1,6 @@
 import { Injectable, Injector } from '@angular/core';
-import { Game1Component } from 'src/app/game1/game1.component';
-import { Player1Component } from 'src/app/player1/player1.component';
+import { Game1Component } from 'src/app/components/game1/game1.component';
+import { Player1Component } from 'src/app/components/player1/player1.component';
 import { ITab } from 'src/app/shared/ITab';
 import { Game1Service } from '../game1/game1.service';
 import { Player1Service } from '../player1/player1.service';
@@ -21,11 +21,11 @@ export class PlayerService {
         //deps: []
       }]
     });
-    const instance = injector.get(Player1Service);
+    //const instance = injector.get(Player1Service);
     const tab : ITab = {
       title: "Player",
       component: Player1Component,
-      state: instance
+      //state: instance
     }
     return tab;
   }

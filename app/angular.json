@@ -76,6 +76,9 @@
             },
             "development": {
               "browserTarget": "gameengine:build:development"
+            },
+            "hmr": {
+              "browserTarget": "gameengine:build:hmr"
             }
           },
           "defaultConfiguration": "development"

@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { TabManagerService } from '../services/tabmanager/tabmanager.service';
+import { TabsState } from 'src/app/store/tabs.state';
 
 @Component({
   selector: 'app-tabmanager',
@@ -8,9 +8,9 @@ import { TabManagerService } from '../services/tabmanager/tabmanager.service';
 })
 export class TabmanagerComponent implements OnInit {
 
-  constructor(private tabManagerService: TabManagerService) { }
+  constructor(private tabsState: TabsState) { }
 
-  tabs$ = this.tabManagerService.tabs$;
+  tabs$ = this.tabsState.tabs$;
 
   ngOnInit(): void {
   }

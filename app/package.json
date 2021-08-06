@@ -4,6 +4,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve --proxy-config proxy.conf.json --hmr",
+    "start:noproxy": "ng serve --hmr",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
@@ -11,7 +12,6 @@
   "private": true,
   "dependencies": {
     "@angular/animations": "~12.1.0",
-    "@angular/common": "~12.1.0",
     "@angular/compiler": "~12.1.0",
     "@angular/core": "~12.1.0",
     "@angular/forms": "~12.1.0",
@@ -20,9 +20,10 @@
     "@angular/router": "~12.1.0",
     "@microsoft/signalr": "^5.0.8",
     "@ng-bootstrap/ng-bootstrap": "^10.0.0",
+    "@ngxs/store": "^3.7.2",
     "bootstrap": "^5.0.2",
     "bootstrap-icons": "^1.5.0",
-    "rxjs": "~6.6.0",
+    "rxjs": "~7.3.0",
     "tslib": "^2.2.0",
     "zone.js": "~0.11.4"
   },

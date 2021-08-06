@@ -1,8 +1,8 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
-import { TabcreatorComponent } from './tabcreator/tabcreator.component';
-import { TabhostComponent } from './tabhost/tabhost.component';
-import { TabmanagerComponent } from './tabmanager/tabmanager.component';
+import { TabcreatorComponent } from './components/tabcreator/tabcreator.component';
+import { TabhostComponent } from './components/tabhost/tabhost.component';
+import { TabmanagerComponent } from './components/tabmanager/tabmanager.component';
 const routes: Routes = [
   {
     path: '', component: TabmanagerComponent, children: [

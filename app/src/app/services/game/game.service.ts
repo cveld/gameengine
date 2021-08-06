@@ -1,5 +1,5 @@
 import { Injectable, Injector } from '@angular/core';
-import { Game1Component } from 'src/app/game1/game1.component';
+import { Game1Component } from 'src/app/components/game1/game1.component';
 import { ITab } from 'src/app/shared/ITab';
 import { Game1Service } from '../game1/game1.service';
 
@@ -19,12 +19,11 @@ export class GameService {
         //deps: []
       }]
     });
-    const instance1 = injector.get(Game1Service);
-    const val1 = instance1.getValue();
+    //const instance = injector.get(Game1Service);
     const tab : ITab = {
       title: "Game",
       component: Game1Component,
-      state: instance1
+      //state: instance
     }
     return tab;
   }

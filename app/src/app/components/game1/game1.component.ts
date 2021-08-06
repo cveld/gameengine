@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
-import { Game1Service } from '../services/game1/game1.service';
-import { SignalrService } from '../services/signalr/SignalrService';
-import { IStateConsumer } from '../shared/IStateConsumer';
+import { Game1Service } from '../../services/game1/game1.service';
+import { SignalrService } from '../../services/signalr/SignalrService';
+import { IStateConsumer } from '../../shared/IStateConsumer';
 
 @Component({
   selector: 'app-game1',
@@ -12,6 +12,7 @@ export class Game1Component implements OnInit, IStateConsumer {
 
   constructor() {
     this.value = Math.random();
+    console.log('game1component constructed');
   }
   game1Service?: Game1Service;
   setState: (state: Game1Service) => void = (state) => {

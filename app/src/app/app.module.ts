@@ -3,25 +3,26 @@ import { BrowserModule } from '@angular/platform-browser';
 import { HttpClientModule } from '@angular/common/http';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
-import { TabmanagerComponent } from './tabmanager/tabmanager.component';
-import { Player1Component } from './player1/player1.component';
-import { TabcreatorComponent } from './tabcreator/tabcreator.component';
-import { TabhostComponent } from './tabhost/tabhost.component';
-import { Game1Component } from './game1/game1.component';
+import { ComponentsModule } from './components/components.module';
+import { ServicesModule } from './services/services.module';
+import { NgxsModule } from '@ngxs/store';
+import { environment } from 'src/environments/environment';
+import { TabsState } from './store/tabs.state';
 
 @NgModule({
   declarations: [
     AppComponent,
-    TabmanagerComponent,
-    Player1Component,
-    TabcreatorComponent,
-    TabhostComponent,
-    Game1Component
+
   ],
   imports: [
     BrowserModule,
     AppRoutingModule,
-    HttpClientModule
+    HttpClientModule,
+    ComponentsModule,
+    ServicesModule,
+    NgxsModule.forRoot([TabsState], {
+      developmentMode: !environment.production
+    })
   ],
   providers: [],
   bootstrap: [AppComponent]
