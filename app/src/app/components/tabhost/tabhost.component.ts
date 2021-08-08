@@ -30,17 +30,14 @@ export class TabhostComponent implements OnInit {
 
   ngOnInit() {
     this.myevent.subscribe(tab => {
-      let resolver = this.componentFactoryResolver.resolveComponentFactory(Game1Component);
-      let componentRef = this.viewContainerRef.createComponent(resolver);
-      this.currentComponentRef = componentRef;
     });
 
-    this.myevent.next(undefined);
+
     //this.myevent.complete();
 
     this.route.paramMap.subscribe(map => {
       if (this.currentComponentRef) {
-        //this.currentComponentRef.destroy();
+        this.currentComponentRef.destroy();
       }
 
       const tabid = parseInt(map.get('tab')!);
@@ -50,21 +47,22 @@ export class TabhostComponent implements OnInit {
         return;
       }
 
-      this.tabsState.tabs$?.subscribe(tabsModel => {
-        const tabs = tabsModel.tabs;
+      this.tabsState.livetabs$?.subscribe(tabsModel => {
+        const tabs = Array.from(tabsModel);
         if (tabid >= tabs.length) {
           console.log(`Tabid ${tabid} is larger than the available tabs.`);
           this.router.navigate(['']);
           return;
         }
-        const tab = tabs[tabid];
+
+        const [_, tab] = tabs[tabid];
 
         //let resolver = this.componentFactoryResolver.resolveComponentFactory(tab.component!);
         console.log('tab', tab);
-        this.myevent.next(tab);
-        //this.myevent.complete();
-
-        //(componentRef.instance as IStateConsumer).setState(tab.state);
+        let resolver = this.componentFactoryResolver.resolveComponentFactory(tab.component);
+        let componentRef = this.viewContainerRef.createComponent(resolver);
+        this.currentComponentRef = componentRef;
+        (componentRef.instance as IStateConsumer).setState(tab.state);
       });
     });
 

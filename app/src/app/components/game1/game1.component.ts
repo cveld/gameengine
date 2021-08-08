@@ -14,11 +14,11 @@ export class Game1Component implements OnInit {
     this.value = Math.random();
     console.log('game1component constructed');
   }
-  // game1Service?: Game1Service;
-  // setState: (state: Game1Service) => void = (state) => {
-  //   this.value = state.randomvalue;
-  //   this.game1Service = state;
-  // }
+  game1Service?: Game1Service;
+  setState: (state: Game1Service) => void = (state) => {
+    this.value = state.randomvalue;
+    this.game1Service = state;
+  }
 
   ngOnInit(): void {
   }
