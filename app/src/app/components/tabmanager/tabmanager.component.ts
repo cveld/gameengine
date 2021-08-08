@@ -8,11 +8,16 @@ import { TabsState } from 'src/app/store/tabs.state';
 })
 export class TabmanagerComponent implements OnInit {
 
-  constructor(private tabsState: TabsState) { }
+  constructor(private tabsState: TabsState) {
+    console.log('TabmanagerComponent constructed')
+  }
 
-  tabs$ = this.tabsState.tabs$;
+  tabs$ = this.tabsState.livetabs$;
 
   ngOnInit(): void {
+    this.tabs$?.subscribe(tabs => {
+      console.log('tabs$ subscribe', tabs);
+    })
   }
 
 }

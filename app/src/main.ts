@@ -22,6 +22,10 @@ platformBrowserDynamic().bootstrapModule(AppModule).then(ref => {
   if (environment.production) {
     return
   }
+
+  ref.onDestroy(() => {
+    console.log('PlatformRef is destroyed', ref);
+  })
   // Ensure Angular destroys itself on hot reloads.
   let oldState = window.ngStateStream;
   console.log(window.ngStateStream);
@@ -43,7 +47,9 @@ platformBrowserDynamic().bootstrapModule(AppModule).then(ref => {
       ...newState.getValue(),
       ...oldState.getValue()
     };
+    console.log('Before newState.next');
     newState.next(merged);
+    console.log('After newState.next');
   }
 
 // Otherwise, log the boot error

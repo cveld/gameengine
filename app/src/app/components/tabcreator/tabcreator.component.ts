@@ -1,7 +1,7 @@
 import { Component, ComponentFactoryResolver, OnInit, ViewContainerRef } from '@angular/core';
 import { Select, Store } from '@ngxs/store';
 import { Observable } from 'rxjs';
-import { AddTab } from 'src/app/store/tabs.actions';
+import { AddTabAction } from 'src/app/store/tabs.actions';
 import { GameService } from '../../services/game/game.service';
 import { PlayerService } from '../../services/player/player.service';
 import { ITab } from '../../shared/ITab';
@@ -28,11 +28,11 @@ export class TabcreatorComponent implements OnInit {
     // let resolver = this.componentFactoryResolver.resolveComponentFactory(GameComponent);
     // this.viewContainerRef.createComponent(resolver);
     const tab = this.gameService.createGame();
-    this.store.dispatch(new AddTab(tab));
+    this.store.dispatch(new AddTabAction(tab));
   }
 
   createPlayerClicked() {
     const tab = this.playerService.createPlayer();
-    this.store.dispatch(new AddTab(tab));
+    this.store.dispatch(new AddTabAction(tab));
   }
 }

@@ -1,6 +1,6 @@
-import { ITab } from "../shared/ITab";
+import { ITabRecord } from "../shared/ITabRecord";
 
-export class AddTab {
+export class AddTabAction {
   static readonly type = '[Tabs] Add tab';
-  constructor(public tab: ITab) {}
+  constructor(public tab: ITabRecord) {}
 }
