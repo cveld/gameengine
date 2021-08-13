@@ -1,4 +1,8 @@
 import { Component, OnInit } from '@angular/core';
+import { Store } from '@ngxs/store';
+import { Observable } from 'rxjs';
+import { TabsState } from 'src/app/store/tabs/tabs.state';
+import { UpdateUserStateAction } from 'src/app/store/userstate/userstate.actions';
 import { Game1Service } from '../../services/game1/game1.service';
 import { SignalrService } from '../../services/signalr/SignalrService';
 import { IStateConsumer } from '../../shared/IStateConsumer';
@@ -10,7 +14,7 @@ import { IStateConsumer } from '../../shared/IStateConsumer';
 })
 export class Game1Component implements OnInit {
 
-  constructor() {
+  constructor(private store: Store, private tabsState: TabsState) {
     this.value = Math.random();
     console.log('game1component constructed');
   }
@@ -18,10 +22,17 @@ export class Game1Component implements OnInit {
   setState: (state: Game1Service) => void = (state) => {
     this.value = state.randomvalue;
     this.game1Service = state;
+    this.state$ = state.state$;
   }
+
+  state$?: Observable<any>;
 
   ngOnInit(): void {
   }
 
   value: Number;
+
+  startGameClicked() {
+    this.game1Service!.startGame();
+  }
 }

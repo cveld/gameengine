@@ -1,5 +1,8 @@
+import { Guid } from "guid-typescript";
+
 export interface ITab {
   title: string;
   component?: any;
-  state?: object;
+  state?: any;
+  stateguid: Guid;
 }

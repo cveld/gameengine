@@ -1,4 +1,8 @@
 <p>game1 works!!</p>
 <p>{{value}}</p>
+<p>State: {{state$ | json}}</p>
 <!-- <p *ngFor="let message of game1Service?.messages">{{message}}</p> -->
-test3
+
+<div *ngIf="state$ | async as state">value = {{state.started}}</div>
+
+<button class="btn btn-primary" (click)="startGameClicked()">Start game</button>

@@ -1,5 +1,7 @@
 import { Injectable, Injector } from '@angular/core';
+import { Guid } from 'guid-typescript';
 import { Game1Component } from 'src/app/components/game1/game1.component';
+import { IStateguidConsumer } from 'src/app/shared/IStateGuidConsumer';
 import { ITab } from 'src/app/shared/ITab';
 import { ITabRecord } from 'src/app/shared/ITabRecord';
 import { UserTypeEnum } from 'src/app/shared/signalrmodels';
@@ -22,11 +24,12 @@ export class GameService {
       }]
     });
     //const instance = injector.get(Game1Service);
+    const guid = Guid.create();
     const tab : ITabRecord = {
       title: "Game",
       userType: UserTypeEnum.game,
       implementationName: 'Game1',
-      state: {}
+      stateguid: guid
       //component: Game1Component,
       //state: instance
     }
@@ -43,10 +46,12 @@ export class GameService {
       }]
     });
     const instance = injector.get(Game1Service);
+    (instance as IStateguidConsumer).setStateguid(tabRecord.stateguid);
     const tab : ITab = {
       title: tabRecord.title,
       component: Game1Component,
-      state: instance
+      state: instance,
+      stateguid: tabRecord.stateguid
     }
     return tab;
   }

@@ -1,7 +1,7 @@
 import { Component, ComponentFactoryResolver, OnInit, ViewContainerRef } from '@angular/core';
 import { Select, Store } from '@ngxs/store';
 import { Observable } from 'rxjs';
-import { AddTabAction } from 'src/app/store/tabs.actions';
+import { AddTabAction } from 'src/app/store/tabs/tabs.actions';
 import { GameService } from '../../services/game/game.service';
 import { PlayerService } from '../../services/player/player.service';
 import { ITab } from '../../shared/ITab';

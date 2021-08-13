@@ -7,7 +7,8 @@ import { ComponentsModule } from './components/components.module';
 import { ServicesModule } from './services/services.module';
 import { NgxsModule } from '@ngxs/store';
 import { environment } from 'src/environments/environment';
-import { TabsState } from './store/tabs.state';
+import { TabsState } from './store/tabs/tabs.state';
+import { UserStateState } from './store/userstate/userstate.state';
 
 @NgModule({
   declarations: [
@@ -20,7 +21,7 @@ import { TabsState } from './store/tabs.state';
     HttpClientModule,
     ComponentsModule,
     ServicesModule,
-    NgxsModule.forRoot([TabsState], {
+    NgxsModule.forRoot([TabsState, UserStateState], {
       developmentMode: !environment.production
     })
   ],

@@ -1,15 +1,18 @@
 import { Injectable } from '@angular/core';
 import { Action, NgxsAfterBootstrap, NgxsOnChanges, NgxsOnInit, NgxsSimpleChange, Select, Selector, State, StateContext } from '@ngxs/store';
+import { patch, append, removeItem, insertItem, updateItem } from '@ngxs/store/operators';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
-import { GameService } from '../services/game/game.service';
-import { PlayerService } from '../services/player/player.service';
-import { ITab } from '../shared/ITab';
-import { ITabRecord } from '../shared/ITabRecord';
-import { UserTypeEnum } from '../shared/signalrmodels';
+import { GameService } from '../../services/game/game.service';
+import { PlayerService } from '../../services/player/player.service';
+import { ITab } from '../../shared/ITab';
+import { ITabRecord } from '../../shared/ITabRecord';
+import { UserTypeEnum } from '../../shared/signalrmodels';
+import { UpdateUserStateAction } from '../userstate/userstate.actions';
+import { UserStateState } from '../userstate/userstate.state';
 import { AddTabAction } from './tabs.actions';
 
-export class TabStateModel {
-  tabs: ITabRecord[] = [];
+export interface TabStateModel {
+  tabs: ITabRecord[]
 }
 @State<TabStateModel>({
   name: 'tabs',
@@ -36,15 +39,15 @@ export class TabsState implements NgxsOnInit, NgxsOnChanges, NgxsAfterBootstrap 
   }
   @Action(AddTabAction)
   addTab(ctx: StateContext<TabStateModel>, action: AddTabAction) {
-    const state = ctx.getState();
-    action.tab.state = undefined;
-    const newstate = { tabs: [...state.tabs, action.tab] };
-    ctx.setState(newstate);
+    ctx.setState(patch({
+      tabs: append([action.tab])
+    }));
   }
 
   @Select((state: any) => state.tabs) tabs$?: Observable<TabStateModel>;
 
   livetabs$ = new BehaviorSubject<Map<ITabRecord, ITab>>(new Map<ITabRecord, ITab>());
+  statetotabindexmap = new Map<any, number>();
 
   maintainLiveTabs(tabStateModel: TabStateModel) {
     console.log('maintainLiveTabs before', this.livetabs$);
@@ -63,6 +66,12 @@ export class TabsState implements NgxsOnInit, NgxsOnChanges, NgxsAfterBootstrap 
         }
       }
     });
+    const array = Array.from(newlivetabs);
+    const newindexmap = new Map<any, number>();
+    array.forEach(([_, tab], index) => {
+      newindexmap.set(tab.state, index);
+    })
+    this.statetotabindexmap = newindexmap;
     this.livetabs$.next(newlivetabs);
   }
 }
