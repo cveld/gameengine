@@ -2,7 +2,7 @@ import { Injectable, Injector } from '@angular/core';
 import { Guid } from 'guid-typescript';
 import { Game1Component } from 'src/app/components/game1/game1.component';
 import { Player1Component } from 'src/app/components/player1/player1.component';
-import { IStateguidConsumer } from 'src/app/shared/IStateGuidConsumer';
+import { IStateguidConsumer } from 'src/app/shared/IStateguidConsumer';
 import { ITab } from 'src/app/shared/ITab';
 import { ITabRecord } from 'src/app/shared/ITabRecord';
 import { UserTypeEnum } from 'src/app/shared/signalrmodels';

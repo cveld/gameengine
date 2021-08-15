@@ -1,12 +1,9 @@
 import { Component, ComponentFactoryResolver, ComponentRef, Injector, NgZone, OnInit, ViewContainerRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
-import { BehaviorSubject, Observable } from 'rxjs';
-import { IStateguidConsumer } from 'src/app/shared/IStateGuidConsumer';
 import { ITab } from 'src/app/shared/ITab';
 import { TabsState } from 'src/app/store/tabs/tabs.state';
 import { IStateConsumer } from '../../shared/IStateConsumer';
-import { Game1Component } from '../game1/game1.component';
 
 @Component({
   selector: 'app-tabhost',

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Guid } from 'guid-typescript';
-import { IStateguidConsumer } from 'src/app/shared/IStateGuidConsumer';
+import { IStateguidConsumer } from 'src/app/shared/IStateguidConsumer';
 import { UserTypeEnum } from 'src/app/shared/signalrmodels';
 import { SignalrService } from '../signalr/SignalrService';
 
