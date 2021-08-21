@@ -1,0 +1,6 @@
+<p>player1 works!</p>
+
+<button class="btn btn-primary" (click)="queryGames()">Query games</button>
+
+<h1>Games found</h1>
+<p *ngFor="let game of games | keyvalue">{{game.key}} <button class="btn btn-primary" (click)="join(game.key)">Join</button></p>

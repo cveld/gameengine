@@ -1,11 +1,11 @@
 import { Injectable, Injector } from '@angular/core';
 import { Guid } from 'guid-typescript';
-import { Game1Component } from 'src/app/components/game1/game1.component';
+import { Game1Component } from '../../game1/game1/game1.component';
 import { IStateguidConsumer } from '../../shared/IStateguidConsumer';
 import { ITab } from 'src/app/shared/ITab';
 import { ITabRecord } from 'src/app/shared/ITabRecord';
 import { UserTypeEnum } from 'src/app/shared/signalrmodels';
-import { Game1Service } from '../game1/game1.service';
+import { Game1Service } from '../../game1/game1/game1.service';
 
 @Injectable({
   providedIn: 'root'

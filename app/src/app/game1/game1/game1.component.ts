@@ -3,7 +3,7 @@ import { Store } from '@ngxs/store';
 import { Observable } from 'rxjs';
 import { TabsState } from 'src/app/store/tabs/tabs.state';
 import { UpdateUserStateAction } from 'src/app/store/userstate/userstate.actions';
-import { Game1Service } from '../../services/game1/game1.service';
+import { Game1Service } from './game1.service';
 import { SignalrService } from '../../services/signalr/SignalrService';
 import { IStateConsumer } from '../../shared/IStateConsumer';
 

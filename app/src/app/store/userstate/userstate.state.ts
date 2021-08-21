@@ -1,7 +1,6 @@
 import { Injectable } from "@angular/core";
 import { Action, Selector, State, StateContext } from "@ngxs/store";
 import { append, patch, updateItem } from "@ngxs/store/operators";
-import { strictEqual } from "assert";
 import { Guid } from "guid-typescript";
 import { IUserState } from "src/app/shared/IUserState";
 import { UpdateUserStateAction } from "./userstate.actions";

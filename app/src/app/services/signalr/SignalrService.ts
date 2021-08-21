@@ -2,7 +2,7 @@ import * as signalR from "@microsoft/signalr";
 import { Injectable } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { environment } from "../../../environments/environment";
-import { ISignalrMessage } from "src/app/shared/signalrmodels";
+import { ISignalrMessage } from "../../shared/signalrmodels";
 @Injectable({
   providedIn: 'root',
 })
