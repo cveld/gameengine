@@ -1,9 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { Store } from '@ngxs/store';
-import { Observable } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
 import { TabsState } from 'src/app/store/tabs/tabs.state';
 import { UpdateUserStateAction } from 'src/app/store/userstate/userstate.actions';
-import { Game1Service } from './game1.service';
+import { Game1Service, IGame1State } from './game1.service';
 import { SignalrService } from '../../services/signalr/SignalrService';
 import { IStateConsumer } from '../../shared/IStateConsumer';
 
@@ -25,7 +25,7 @@ export class Game1Component implements OnInit {
     this.state$ = state.state$;
   }
 
-  state$?: Observable<any>;
+  state$?: BehaviorSubject<IGame1State>;
 
   ngOnInit(): void {
   }
@@ -34,5 +34,8 @@ export class Game1Component implements OnInit {
 
   startGameClicked() {
     this.game1Service!.startGame();
+  }
+  stopGameClicked() {
+    this.game1Service!.stopGame();
   }
 }

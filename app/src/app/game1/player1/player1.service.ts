@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { Store } from '@ngxs/store';
 import { Guid } from 'guid-typescript';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { IStateguidConsumer } from 'src/app/shared/IStateguidConsumer';
 import { ISignalrMessage, UserTypeEnum } from 'src/app/shared/signalrmodels';
@@ -16,10 +16,17 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
   constructor(private signalr: SignalrService, private store: Store) {
     this.randomvalue = Math.random();
     this.signalr.addHandler(Game1Ops.querygamesresult, (value: any) => this.querygamesresult(value));
+    const observablestate$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
+    this.subscriptions.push(observablestate$.subscribe(this.state$));
   }
+
+  subscriptions = new Array<Subscription>();
+
   ngOnDestroy(): void {
     console.log(`Player1Service[${this.guid}].ngOnDestroy`);
+    this.subscriptions.forEach(value => value.unsubscribe());
   }
+
   querygamesresult(value: ISignalrMessage<unknown>): void {
     this.games.set(value.gameid!, value.gameid!);
   }
@@ -39,6 +46,8 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
 
   setStateguid = (stateguid: Guid) => {
     this.guid = stateguid;
+    // const _state$ = this.store.select(UserStateState.userstate(stateguid));
+    // this.subscriptions.push(_state$.subscribe(this.state$));
   }
 
   value?: string;
@@ -54,7 +63,9 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
   joinGame(guid: Guid) {
     this.signalr.sendSignalrMessage({
       type: Game1Ops.join,
-      usertype: UserTypeEnum.player
+      usertype: UserTypeEnum.player,
+      connectionid: this.guid?.toString(),
+      gameid: guid.toString()
     }).subscribe();
   }
 }

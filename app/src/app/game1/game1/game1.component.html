@@ -1,11 +1,23 @@
-<p>game1 works!!</p>
+<ng-container *ngIf="state$ | async as state">
+<p>game1 id: {{game1Service?.guid}}</p>
 <p>{{value}}</p>
-<p>State: {{state$ | json}}</p>
+
 <!-- <p *ngFor="let message of game1Service?.messages">{{message}}</p> -->
 
-<div *ngIf="state$ | async as state">value = {{state.started}}</div>
+<div>state = {{state|json}}</div>
+<div>game started = {{state.started}}</div>
 
-<button class="btn btn-primary" (click)="startGameClicked()">Start game</button>
+<h1>Messages</h1>
+<ol><li *ngFor="let message of game1Service?.messages">
+  <span *ngIf="message.type === 'error'" style="color: red">{{message.message}}</span>
+  <span *ngIf="message.type === 'message'">{{message.message}}</span>
+</li></ol>
+
+<h1>Actions</h1>
+<button class="btn btn-primary mr-2" (click)="startGameClicked()">Start game</button>
+<button class="btn btn-primary" (click)="stopGameClicked()">Stop game</button>
 
 <h1>Joined players</h1>
-<ol><li *ngFor="let message of game1Service?.messages">{{message}}</li></ol>
+<ol><li *ngFor="let joinedplayer of state.joinedplayers">{{joinedplayer}}</li></ol>
+
+</ng-container>

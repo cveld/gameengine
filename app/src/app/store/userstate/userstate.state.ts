@@ -1,7 +1,8 @@
 import { Injectable } from "@angular/core";
-import { Action, Selector, State, StateContext } from "@ngxs/store";
+import { Action, createSelector, Select, Selector, State, StateContext } from "@ngxs/store";
 import { append, patch, updateItem } from "@ngxs/store/operators";
 import { Guid } from "guid-typescript";
+import { Observable } from "rxjs";
 import { IUserState } from "src/app/shared/IUserState";
 import { UpdateUserStateAction } from "./userstate.actions";
 
@@ -17,6 +18,8 @@ export interface UserStateModel {
 })
 @Injectable()
 export class UserStateState {
+  //@Select((state: any) => state.userstates) userstates$?: Observable<UserStateModel>;
+
   @Action(UpdateUserStateAction)
   updateUserState(ctx: StateContext<UserStateModel>, action: UpdateUserStateAction) {
     const state = ctx.getState();
@@ -33,9 +36,7 @@ export class UserStateState {
       }));
     } else {
       ctx.setState(patch({
-        userstates: updateItem<IUserState>(index, patch({
-          state: action.state
-        }))
+        userstates: updateItem<IUserState>(index, newstate)
       }));
     }
   }
@@ -49,4 +50,10 @@ export class UserStateState {
       return state.userstates.find(value => value.guid === guid)?.state ?? {};
     }
   }
+
+  // static userstate(guid?: Guid) {
+  //   return createSelector([UserStateState], (state: UserStateModel) => {
+  //     return state.userstates.find(s => s.guid === guid)?.state ?? {};
+  //   });
+  // }
 }

@@ -12,7 +12,7 @@ import { IUserState } from 'src/app/shared/IUserState';
 import { ISignalrMessage, UserTypeEnum } from 'src/app/shared/signalrmodels';
 import { Game1Ops } from '../shared/ops';
 
-interface IGame1State {
+export interface IGame1State {
   started: boolean;
   joinedplayers: Array<Guid>;
   players: Array<Array<ICard>>;
@@ -60,16 +60,38 @@ interface ICard {
   special?: SpecialEnum
 }
 
+export enum MessageTypeEnum {
+  undefined = 'undefined',
+  message = 'message',
+  error = 'error'
+}
+
+interface IMessage {
+  type: MessageTypeEnum,
+  message: string
+}
+
 @Injectable()
 export class Game1Service implements IStateguidConsumer, OnDestroy {
+  stopGame() {
+    const currentState = this.state$.value;
+    const nextState = { ...currentState, started: false };
+    this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
+  }
   startGame() {
-    //const index = this.tabsState.statetotabindexmap.get(this)!;
-
-    this.store.dispatch(new UpdateUserStateAction(this.guid!, { started: true }));
+    const currentState = this.state$.value;
+    if (!currentState.joinedplayers || currentState.joinedplayers.length < 2) {
+      this.messages.push({
+        type: MessageTypeEnum.error,
+        message: `at least two players required`
+      });
+      return;
+    }
+    const nextState = { ...currentState, started: true };
+    this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
   }
 
   guid?: Guid;
-  _state$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
   state$ = new BehaviorSubject<IGame1State>({
     started: false,
     players: [],
@@ -79,12 +101,13 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
   constructor(
     private signalr: SignalrService,
     private tabsState: TabsState,
-    private userState: UserStateState,
+    public userState: UserStateState,
     private store: Store) {
     this.randomvalue = Math.random();
     this.signalr.addHandler(Game1Ops.join, value => this.joinGame(value));
     this.signalr.addHandler(Game1Ops.querygames, value => this.querygames(value));
-    this.subscriptions.push(this._state$.subscribe(this.state$));
+    const observablestate$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
+    this.subscriptions.push(observablestate$.subscribe(this.state$));
   }
   querygames(value: ISignalrMessage<unknown>): void {
     this.signalr.sendSignalrMessage({
@@ -102,9 +125,11 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
 
   setStateguid = (stateguid: Guid) => {
     this.guid = stateguid;
+    //const _state$ = this.store.select(UserStateState.userstate(stateguid));
+    //this.subscriptions.push(_state$.subscribe(this.state$));
   }
 
-  messages: string[] = [];
+  messages: IMessage[] = [];
   value?: string;
   randomvalue: Number;
   setValue(value: string) {
@@ -116,8 +141,18 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
   }
 
   joinGame(value: ISignalrMessage<unknown>) {
-    console.log('join game', value);
-    this.messages.push('join game');
+    if (value.gameid === this.guid?.toString()) {
+      console.log('join game', value);
+      this.messages.push({
+        type: MessageTypeEnum.message,
+        message: `join game player ${value.connectionid}`
+      });
+
+      const joinedplayers = this.state$.value.joinedplayers ?? [];
+      const guid = Guid.parse(value.connectionid!);
+
+      this.store.dispatch(new UpdateUserStateAction(this.guid!, { ...this.state$.value, joinedplayers: [...joinedplayers, guid] }));
+    }
   }
 
 }
