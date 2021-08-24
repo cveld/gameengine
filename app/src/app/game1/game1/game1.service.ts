@@ -11,6 +11,7 @@ import { map } from 'rxjs/operators';
 import { IUserState } from 'src/app/shared/IUserState';
 import { ISignalrMessage, UserTypeEnum } from 'src/app/shared/signalrmodels';
 import { Game1Ops } from '../shared/ops';
+import { cpuUsage } from 'process';
 
 export interface IGame1State {
   started: boolean;
@@ -18,6 +19,9 @@ export interface IGame1State {
   players: Array<Array<ICard>>;
   turn?: number; // which player has the turn
   roundstarted?: boolean;
+  stack?: Array<ICard>;
+  playedcards?: Array<ICard>;
+  lastroundresult?: number;
 }
 
 interface IPlayer1State {
@@ -28,7 +32,7 @@ interface IPlayer1State {
   players: Array<Array<ICard>>;
   allowedops: Array<string>;
   roundstarted: boolean;
-  lastroundresult: string; // which player has won
+  lastroundresult?: number; // which player has won
 }
 
 enum ColorEnum {
@@ -73,6 +77,47 @@ interface IMessage {
 
 @Injectable()
 export class Game1Service implements IStateguidConsumer, OnDestroy {
+  generateDeck() {
+    const colors = [ColorEnum.clubs, ColorEnum.diamonds, ColorEnum.hearts, ColorEnum.spades];
+    const cards = new Array<ICard>();
+    colors.forEach(color => {
+      for (let number = 0; number < 13; number++) {
+        const card : ICard = {
+          type: CardTypeEnum.regular,
+          color: color,
+          number: number
+        }
+        cards.push(card);
+      }
+    });
+    return cards;
+  }
+  shuffle<T>(array: Array<T>) {
+    var m = array.length, t, i;
+
+    // While there remain elements to shuffle…
+    while (m) {
+
+      // Pick a remaining element…
+      i = Math.floor(Math.random() * m--);
+
+      // And swap it with the current element.
+      t = array[m];
+      array[m] = array[i];
+      array[i] = t;
+    }
+
+    return array;
+  }
+  generateRandomCards() {
+    const joker : ICard = {
+      type: CardTypeEnum.special,
+      special: SpecialEnum.joker
+    };
+    const cards = [...this.generateDeck(), ...this.generateDeck(), joker, joker, joker, joker];
+
+    return this.shuffle(cards);
+  }
   stopGame() {
     const currentState = this.state$.value;
     const nextState = { ...currentState, started: false };
@@ -87,8 +132,51 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
       });
       return;
     }
-    const nextState = { ...currentState, started: true };
+    const stack = this.generateRandomCards();
+    const players = [];
+    for (let i = 0; i < currentState.joinedplayers.length; i++) {
+      players.push(stack.splice(-7, 7));
+    }
+
+    const playedcards: ICard[] = [];
+    do {
+      const card = stack.pop();
+      playedcards.push(card!);
+      if (!this.IsPestCard(card!)) {
+        break;
+      }
+    } while (true)
+
+    const nextState: IGame1State = {
+      ...currentState,
+      started: true,
+      playedcards: playedcards,
+      players: players,
+      turn: 0,
+      roundstarted: true,
+      stack: stack
+    };
     this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
+    this.sendPlayerStates(nextState);
+  }
+  sendPlayerStates(nextState: IGame1State) {
+    nextState.joinedplayers.forEach((playerid, index) => {
+      this.signalr.sendSignalrMessage({
+        type: Game1Ops.updateplayer,
+        usertype: UserTypeEnum.game,
+        gameid: this.guid?.toString(),
+        connectionid: playerid.toString(),
+        payload: {
+          allowedops: [],
+          myindex: index,
+          stacksize: nextState.stack?.length,
+          myturn: nextState.turn === index,
+          playedcards: nextState.playedcards,
+          players: [],
+          roundstarted: nextState.roundstarted
+        } as IPlayer1State
+      }).subscribe();
+    });
   }
 
   guid?: Guid;
@@ -106,8 +194,8 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     this.randomvalue = Math.random();
     this.signalr.addHandler(Game1Ops.join, value => this.joinGame(value));
     this.signalr.addHandler(Game1Ops.querygames, value => this.querygames(value));
-    const observablestate$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
-    this.subscriptions.push(observablestate$.subscribe(this.state$));
+    // const observablestate$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
+    // this.subscriptions.push(observablestate$.subscribe(this.state$));
   }
   querygames(value: ISignalrMessage<unknown>): void {
     this.signalr.sendSignalrMessage({
@@ -125,8 +213,8 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
 
   setStateguid = (stateguid: Guid) => {
     this.guid = stateguid;
-    //const _state$ = this.store.select(UserStateState.userstate(stateguid));
-    //this.subscriptions.push(_state$.subscribe(this.state$));
+    const _state$ = this.store.select(UserStateState.userstate(stateguid));
+    this.subscriptions.push(_state$.subscribe(this.state$));
   }
 
   messages: IMessage[] = [];
@@ -155,4 +243,16 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     }
   }
 
+  IsPestCard(card: ICard) {
+    return (card.special === SpecialEnum.joker)
+       || (card.number === 0) // index 0 is card-value A
+       || (card.number === 1) // index 1 is card-value 2
+       || (card.number === 6)
+       || (card.number === 7)
+       || (card.number === 10)       // jack
+  }
+
+
+
 }
+

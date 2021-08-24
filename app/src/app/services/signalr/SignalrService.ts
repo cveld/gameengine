@@ -1,15 +1,16 @@
 import * as signalR from "@microsoft/signalr";
-import { Injectable } from "@angular/core";
+import { Injectable, OnDestroy } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { environment } from "../../../environments/environment";
 import { ISignalrMessage } from "../../shared/signalrmodels";
 @Injectable({
   providedIn: 'root',
 })
-export class SignalrService {
+export class SignalrService implements OnDestroy {
   connection: signalR.HubConnection;
   constructor(private httpClient: HttpClient) {
     this.connection = new signalR.HubConnectionBuilder()
+    .withAutomaticReconnect()
     .withUrl(`${environment.apiBaseUrl}/api`)
     // .withUrl(`${apiBaseUrl}/api`, { headers: {
     //   ...
@@ -18,6 +19,12 @@ export class SignalrService {
     .build();
     console.log('Connecting...');
     this.connection.start();
+    this.connection.onclose(error => {
+      console.log('signalr disconnected', error);
+    })
+  }
+  ngOnDestroy(): void {
+    this.connection.stop();
   }
 
   handlers = new Map<string, (message: ISignalrMessage<any>) => void>();

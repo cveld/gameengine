@@ -16,8 +16,8 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
   constructor(private signalr: SignalrService, private store: Store) {
     this.randomvalue = Math.random();
     this.signalr.addHandler(Game1Ops.querygamesresult, (value: any) => this.querygamesresult(value));
-    const observablestate$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
-    this.subscriptions.push(observablestate$.subscribe(this.state$));
+    // const observablestate$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
+    // this.subscriptions.push(observablestate$.subscribe(this.state$));
   }
 
   subscriptions = new Array<Subscription>();
@@ -41,13 +41,13 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
 
   games: Map<string, string> = new Map<string, string>();
   guid?: Guid;
-  _state$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
+  //_state$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
   state$ = new BehaviorSubject<any>({});
 
   setStateguid = (stateguid: Guid) => {
     this.guid = stateguid;
-    // const _state$ = this.store.select(UserStateState.userstate(stateguid));
-    // this.subscriptions.push(_state$.subscribe(this.state$));
+    const _state$ = this.store.select(UserStateState.userstate(stateguid));
+    this.subscriptions.push(_state$.subscribe(this.state$));
   }
 
   value?: string;

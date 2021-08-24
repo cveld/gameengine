@@ -41,19 +41,19 @@ export class UserStateState {
     }
   }
 
-  @Selector()
-  static userstate(state: UserStateModel) {
-    return (guid?: Guid) => {
-      if (!guid) {
-        return {}
-      }
-      return state.userstates.find(value => value.guid === guid)?.state ?? {};
-    }
-  }
-
-  // static userstate(guid?: Guid) {
-  //   return createSelector([UserStateState], (state: UserStateModel) => {
-  //     return state.userstates.find(s => s.guid === guid)?.state ?? {};
-  //   });
+  // @Selector()
+  // static userstate(state: UserStateModel) {
+  //   return (guid?: Guid) => {
+  //     if (!guid) {
+  //       return {}
+  //     }
+  //     return state.userstates.find(value => value.guid === guid)?.state ?? {};
+  //   }
   // }
+
+  static userstate(guid?: Guid) {
+    return createSelector([UserStateState], (state: UserStateModel) => {
+      return state.userstates.find(s => s.guid === guid)?.state ?? {};
+    });
+  }
 }
