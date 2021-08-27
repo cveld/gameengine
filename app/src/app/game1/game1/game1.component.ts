@@ -6,6 +6,7 @@ import { UpdateUserStateAction } from 'src/app/store/userstate/userstate.actions
 import { Game1Service, IGame1State } from './game1.service';
 import { SignalrService } from '../../services/signalr/SignalrService';
 import { IStateConsumer } from '../../shared/IStateConsumer';
+import { CardTypeEnum, ICard, SuitEnum } from 'src/app/card/card.models';
 
 @Component({
   selector: 'app-game1',
@@ -31,6 +32,11 @@ export class Game1Component implements OnInit {
   }
 
   value: Number;
+  testcard: ICard = {
+    type: CardTypeEnum.regular,
+    number: 2,
+    suit: SuitEnum.diamonds
+  }
 
   startGameClicked() {
     this.game1Service!.startGame();

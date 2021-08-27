@@ -12,6 +12,7 @@ import { IUserState } from 'src/app/shared/IUserState';
 import { ISignalrMessage, UserTypeEnum } from 'src/app/shared/signalrmodels';
 import { Game1Ops } from '../shared/ops';
 import { cpuUsage } from 'process';
+import { CardTypeEnum, ICard, SpecialEnum, getSuitColor, suits, SuitEnum } from 'src/app/card/card.models';
 
 export interface IGame1State {
   started: boolean;
@@ -22,6 +23,7 @@ export interface IGame1State {
   stack?: Array<ICard>;
   playedcards?: Array<ICard>;
   lastroundresult?: number;
+  cardsToTake?: number; // adding jokers and 2's
 }
 
 interface IPlayer1State {
@@ -35,34 +37,6 @@ interface IPlayer1State {
   lastroundresult?: number; // which player has won
 }
 
-enum ColorEnum {
-  undefined = 'undefined',
-  spades = 'spades',
-  hearts = 'hearts',
-  clubs = 'clubs',
-  diamonds = 'diamonds',
-}
-
-enum SpecialEnum {
-  undefined = 'undefined',
-  joker = 'joker',
-  covered = 'covered'
-}
-
-const cardNumbers = "A 2 3 4 5 6 7 8 9 10J Q K ";
-
-enum CardTypeEnum {
-  undefined = 'undefined',
-  regular = 'regular',
-  special = 'special'
-}
-
-interface ICard {
-  color?: ColorEnum,
-  number?: number,
-  type: CardTypeEnum,
-  special?: SpecialEnum
-}
 
 export enum MessageTypeEnum {
   undefined = 'undefined',
@@ -78,13 +52,12 @@ interface IMessage {
 @Injectable()
 export class Game1Service implements IStateguidConsumer, OnDestroy {
   generateDeck() {
-    const colors = [ColorEnum.clubs, ColorEnum.diamonds, ColorEnum.hearts, ColorEnum.spades];
     const cards = new Array<ICard>();
-    colors.forEach(color => {
+    suits.forEach(suit => {
       for (let number = 0; number < 13; number++) {
         const card : ICard = {
           type: CardTypeEnum.regular,
-          color: color,
+          suit: suit,
           number: number
         }
         cards.push(card);
@@ -110,11 +83,19 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     return array;
   }
   generateRandomCards() {
-    const joker : ICard = {
+    const jokerblack : ICard = {
       type: CardTypeEnum.special,
+      suit: SuitEnum.clubs,
       special: SpecialEnum.joker
     };
-    const cards = [...this.generateDeck(), ...this.generateDeck(), joker, joker, joker, joker];
+    const jokerred : ICard = {
+      type: CardTypeEnum.special,
+      suit: SuitEnum.diamonds,
+      special: SpecialEnum.joker
+    };
+
+    const deck = this.generateDeck();
+    const cards = [...deck, ...deck, jokerred, jokerred, jokerblack, jokerblack];
 
     return this.shuffle(cards);
   }
@@ -133,6 +114,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
       return;
     }
     const stack = this.generateRandomCards();
+
     const players = [];
     for (let i = 0; i < currentState.joinedplayers.length; i++) {
       players.push(stack.splice(-7, 7));
