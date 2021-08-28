@@ -2,6 +2,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Guid } from 'guid-typescript';
 import { Observable } from 'rxjs';
 import { Player1Service } from 'src/app/game1/player1/player1.service';
+import { IPlayer1State } from '../shared/player1.models';
 
 @Component({
   selector: 'app-player1',
@@ -19,7 +20,7 @@ export class Player1Component implements OnInit, OnDestroy {
   }
 
   player1Service?: Player1Service;
-  state$?: Observable<any>;
+  state$?: Observable<IPlayer1State>;
   setState(state: Player1Service) {
     this.player1Service = state;
     this.games =  this.player1Service.games;

@@ -36,6 +36,17 @@ export function getSuitColor(suitEnum: SuitEnum) {
   }
 }
 
+export function getCoveredCards(number: number) {
+  const cards: ICard[] = [];
+  for (let i = 0; i < number; i++) {
+    cards.push({
+      type: CardTypeEnum.special,
+      special: SpecialEnum.covered
+    });
+  }
+  return cards;
+}
+
 export const suits = [SuitEnum.spades, SuitEnum.hearts, SuitEnum.diamonds, SuitEnum.clubs];
 
 export interface ICard {

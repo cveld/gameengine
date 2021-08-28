@@ -12,7 +12,8 @@ import { IUserState } from 'src/app/shared/IUserState';
 import { ISignalrMessage, UserTypeEnum } from 'src/app/shared/signalrmodels';
 import { Game1Ops } from '../shared/ops';
 import { cpuUsage } from 'process';
-import { CardTypeEnum, ICard, SpecialEnum, getSuitColor, suits, SuitEnum } from 'src/app/card/card.models';
+import { CardTypeEnum, ICard, SpecialEnum, getSuitColor, suits, SuitEnum, getCoveredCards } from 'src/app/card/card.models';
+import { IPlayer1State } from '../shared/player1.models';
 
 export interface IGame1State {
   started: boolean;
@@ -24,17 +25,6 @@ export interface IGame1State {
   playedcards?: Array<ICard>;
   lastroundresult?: number;
   cardsToTake?: number; // adding jokers and 2's
-}
-
-interface IPlayer1State {
-  stacksize: number;
-  playedcards: Array<ICard>;
-  myturn: boolean;
-  myindex: number;
-  players: Array<Array<ICard>>;
-  allowedops: Array<string>;
-  roundstarted: boolean;
-  lastroundresult?: number; // which player has won
 }
 
 
@@ -143,6 +133,10 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
   }
   sendPlayerStates(nextState: IGame1State) {
     nextState.joinedplayers.forEach((playerid, index) => {
+      const players: number[] = [];
+      nextState.players.forEach(player => {
+        players.push(player.length);
+      });
       this.signalr.sendSignalrMessage({
         type: Game1Ops.updateplayer,
         usertype: UserTypeEnum.game,
@@ -154,7 +148,9 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
           stacksize: nextState.stack?.length,
           myturn: nextState.turn === index,
           playedcards: nextState.playedcards,
-          players: [],
+          joinedplayers: nextState.joinedplayers,
+          mycards: nextState.players[index],
+          players: players,
           roundstarted: nextState.roundstarted
         } as IPlayer1State
       }).subscribe();

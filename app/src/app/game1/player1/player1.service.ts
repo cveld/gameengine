@@ -5,10 +5,12 @@ import { BehaviorSubject, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { IStateguidConsumer } from 'src/app/shared/IStateguidConsumer';
 import { ISignalrMessage, UserTypeEnum } from 'src/app/shared/signalrmodels';
+import { UpdateUserStateAction } from 'src/app/store/userstate/userstate.actions';
 import { UserStateState } from 'src/app/store/userstate/userstate.state';
 import { SignalrService } from '../../services/signalr/SignalrService';
 import { Game1Service } from '../game1/game1.service';
 import { Game1Ops } from '../shared/ops';
+import { IPlayer1State } from '../shared/player1.models';
 
 @Injectable()
 export class Player1Service implements IStateguidConsumer, OnDestroy {
@@ -16,8 +18,21 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
   constructor(private signalr: SignalrService, private store: Store) {
     this.randomvalue = Math.random();
     this.signalr.addHandler(Game1Ops.querygamesresult, (value: any) => this.querygamesresult(value));
+    this.signalr.addHandler(Game1Ops.updateplayer, (value: any) => this.updateplayer(value))
     // const observablestate$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
     // this.subscriptions.push(observablestate$.subscribe(this.state$));
+  }
+  updateplayer(value: ISignalrMessage<IPlayer1State>): void {
+    if (value.connectionid !== this.guid?.toString()) {
+      return
+    }
+    const currentState = this.state$.value;
+    const nextState: IPlayer1State = {
+      ...currentState,
+      ...value.payload,
+      joinedplayers: (value.payload?.joinedplayers as any)?.map((v: any) => Guid.parse(v.value))
+    }
+    this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
   }
 
   subscriptions = new Array<Subscription>();
@@ -42,7 +57,7 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
   games: Map<string, string> = new Map<string, string>();
   guid?: Guid;
   //_state$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
-  state$ = new BehaviorSubject<any>({});
+  state$ = new BehaviorSubject<IPlayer1State>({});
 
   setStateguid = (stateguid: Guid) => {
     this.guid = stateguid;

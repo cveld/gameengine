@@ -1,6 +1,24 @@
+<ng-container *ngIf="state$ | async as state">
 <p>player1 id: {{player1Service?.guid}}</p>
 
 <button class="btn btn-primary" (click)="queryGames()">Query games</button>
 
 <h1>Games found</h1>
 <p *ngFor="let game of games | keyvalue">{{game.key}} <button class="btn btn-primary" (click)="join(game.key)">Join</button></p>
+
+  <ng-container *ngIf="state.roundstarted">
+    <h1>Game state</h1>
+    <div>My turn = {{state.myturn}}</div>
+    <ng-container *ngIf="state.playedcards">
+      <h2>Played (count = {{state.playedcards?.length}})</h2>
+      <app-card *ngFor="let card of state.playedcards; index as i" [card]="state.playedcards![state.playedcards!.length-1-i]"></app-card>
+    </ng-container>
+    <h1>My cards</h1>
+    <app-card *ngFor="let card of state.mycards" [card]="card"></app-card>
+    <h1>Other cards</h1>
+    <table>
+      <thead><th>Player</th><th>Number of cards</th></thead>
+      <tr *ngFor="let player of state.players; index as i"><td>{{state.joinedplayers![i]}}</td><td>{{player}}</td></tr>
+    </table>
+  </ng-container>
+</ng-container>
