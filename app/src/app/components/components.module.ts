@@ -1,5 +1,6 @@
 import { CommonModule } from "@angular/common";
 import { NgModule } from "@angular/core";
+import { FormsModule } from "@angular/forms";
 import { AppRoutingModule } from "../app-routing.module";
 import { CardComponent } from "../card/card.component";
 import { Game1Component } from "../game1/game1/game1.component";
@@ -19,7 +20,8 @@ import { TabmanagerComponent } from "./tabmanager/tabmanager.component";
   ],
   imports: [
     AppRoutingModule,
-    CommonModule
+    CommonModule,
+    FormsModule
   ]
 })
 export class ComponentsModule { }

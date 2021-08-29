@@ -44,8 +44,10 @@ export class Player1Component implements OnInit, OnDestroy {
     this.player1Service?.joinGame(guid);
   }
 
+  sayLastCard: boolean = false;
+
   playCard(index: number) {
-    this.player1Service?.playCard(index);
+    this.player1Service?.playCard(index, this.sayLastCard);
   }
   drawCard() {
     this.player1Service?.drawCard();

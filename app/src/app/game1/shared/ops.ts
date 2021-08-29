@@ -7,3 +7,8 @@ export enum Game1Ops {
   drawcard = 'game1.drawcard', // the player sends this to the game
   updateplayer = 'game1.updateplayer' // the game engine sends every player a personalized payload
 }
+
+export interface IPlaycard {
+  index: number;
+  sayLastCard: boolean;
+}

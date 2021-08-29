@@ -9,7 +9,7 @@ import { UpdateUserStateAction } from 'src/app/store/userstate/userstate.actions
 import { UserStateState } from 'src/app/store/userstate/userstate.state';
 import { SignalrService } from '../../services/signalr/SignalrService';
 import { Game1Service } from '../game1/game1.service';
-import { Game1Ops } from '../shared/ops';
+import { Game1Ops, IPlaycard } from '../shared/ops';
 import { IPlayer1State } from '../shared/player1.models';
 
 @Injectable()
@@ -94,14 +94,17 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
       gameid: currentState.gameid?.toString()
     }).subscribe();
   }
-  playCard(index: number) {
+  playCard(index: number, sayLastCard: boolean) {
     const currentState = this.state$?.value;
-    this.signalr.sendSignalrMessage({
+    this.signalr.sendSignalrMessage<IPlaycard>({
       type: Game1Ops.playcard,
       usertype: UserTypeEnum.player,
       connectionid: this.guid?.toString(),
       gameid: currentState.gameid?.toString(),
-      payload: index
+      payload: {
+        index: index,
+        sayLastCard: sayLastCard
+      }
     }).subscribe();
   }
 }

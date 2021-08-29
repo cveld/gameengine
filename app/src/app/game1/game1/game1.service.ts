@@ -10,7 +10,7 @@ import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { IUserState } from 'src/app/shared/IUserState';
 import { ISignalrMessage, UserTypeEnum } from 'src/app/shared/signalrmodels';
-import { Game1Ops } from '../shared/ops';
+import { Game1Ops, IPlaycard } from '../shared/ops';
 import { cpuUsage } from 'process';
 import { CardTypeEnum, ICard, SpecialEnum, getSuitColor, suits, SuitEnum, getCoveredCards } from 'src/app/card/card.models';
 import { IPlayer1State } from '../shared/player1.models';
@@ -137,7 +137,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
   sendPlayerStates(nextState: IGame1State) {
     nextState.joinedplayers.forEach((playerid, index) => {
       const players: number[] = [];
-      nextState.players.forEach(player => {
+      nextState.players?.forEach(player => {
         players.push(player.length);
       });
       this.signalr.sendSignalrMessage<IPlayer1State>({
@@ -151,6 +151,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
           myindex: index,
           stacksize: nextState.stack?.length,
           myturn: nextState.turn === index,
+          lastroundresult: nextState.lastroundresult,
           playedcards: nextState.playedcards,
           joinedplayers: nextState.joinedplayers,
           mycards: nextState.players[index],
@@ -177,10 +178,42 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     this.signalr.addHandler(Game1Ops.join, value => this.joinGame(value));
     this.signalr.addHandler(Game1Ops.querygames, value => this.querygames(value));
     this.signalr.addHandler(Game1Ops.drawcard, value => this.drawcard(value));
+    this.signalr.addHandler<IPlaycard>(Game1Ops.playcard, value => this.playcard(value));
     // const observablestate$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
     // this.subscriptions.push(observablestate$.subscribe(this.state$));
   }
+  playcard(value: ISignalrMessage<IPlaycard>): void {
+    if (value.gameid !== this.guid?.toString()) {
+      return;
+    }
+    const currentState = this.state$.value;
+    const playerindex = currentState.joinedplayers.findIndex(g => g.toString() === value.connectionid!);
+    if (playerindex === -1) {
+      // player not found
+      return
+    }
+    if (currentState.turn !== playerindex) {
+      // player is not on turn
+      return
+    }
+
+    const playcard = currentState.players[playerindex][value.payload?.index!];
+
+    const nextState = produce(currentState, draft => {
+      draft.players[playerindex].splice(value.payload?.index!, 1);
+      if (draft.players[playerindex].length === 0) {
+        draft.lastroundresult = playerindex;
+      }
+      draft.playedcards?.push(playcard);
+      draft.turn = (draft.turn!+1) % draft.joinedplayers.length;
+    });
+    this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
+    this.sendPlayerStates(nextState);
+  }
   drawcard(value: ISignalrMessage<unknown>): void {
+    if (value.gameid !== this.guid?.toString()) {
+      return;
+    }
     const currentState = this.state$.value;
     const playerindex = currentState.joinedplayers.findIndex(g => g.toString() === value.connectionid!);
     if (playerindex === -1) {
@@ -193,11 +226,12 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     }
 
     const nextState = produce(currentState, draft => {
-      const newstack = currentState.stack?.slice();
-      const newplayers = currentState.players.slice();
-      const newplayer = currentState.players[playerindex].slice();
-      const drawcard = draft.stack?.pop();
-      draft.players[playerindex].push(drawcard!);
+      const numberOfCards = draft.cardsToTake === 0 ? 1 : draft.cardsToTake!;
+      for (let i = 0; i < numberOfCards; i++) {
+        const drawcard = draft.stack?.pop();
+        draft.players[playerindex].push(drawcard!);
+      }
+      draft.turn = (draft.turn!+1) % draft.joinedplayers.length;
     });
 
     this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
@@ -237,16 +271,21 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
 
   joinGame(value: ISignalrMessage<unknown>) {
     if (value.gameid === this.guid?.toString()) {
-      console.log('join game', value);
+      const currentState = this.state$.value;
+      const joinedplayers = currentState.joinedplayers ?? [];
+      if (joinedplayers.find(v => v.toString() === value.connectionid)) {
+        // already joined
+        return;
+      }
       this.messages.push({
         type: MessageTypeEnum.message,
         message: `join game player ${value.connectionid}`
       });
 
-      const joinedplayers = this.state$.value.joinedplayers ?? [];
       const guid = Guid.parse(value.connectionid!);
-
-      this.store.dispatch(new UpdateUserStateAction(this.guid!, { ...this.state$.value, joinedplayers: [...joinedplayers, guid] }));
+      const nextState = { ...currentState, joinedplayers: [...joinedplayers, guid] };
+      this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
+      this.sendPlayerStates(nextState);
     }
   }
 
