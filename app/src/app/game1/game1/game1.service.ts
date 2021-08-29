@@ -14,6 +14,8 @@ import { Game1Ops } from '../shared/ops';
 import { cpuUsage } from 'process';
 import { CardTypeEnum, ICard, SpecialEnum, getSuitColor, suits, SuitEnum, getCoveredCards } from 'src/app/card/card.models';
 import { IPlayer1State } from '../shared/player1.models';
+import { updateItem } from '@ngxs/store/operators';
+import { produce } from 'immer';
 
 export interface IGame1State {
   started: boolean;
@@ -125,6 +127,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
       playedcards: playedcards,
       players: players,
       turn: 0,
+      cardsToTake: 0,
       roundstarted: true,
       stack: stack
     };
@@ -137,12 +140,13 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
       nextState.players.forEach(player => {
         players.push(player.length);
       });
-      this.signalr.sendSignalrMessage({
+      this.signalr.sendSignalrMessage<IPlayer1State>({
         type: Game1Ops.updateplayer,
         usertype: UserTypeEnum.game,
         gameid: this.guid?.toString(),
         connectionid: playerid.toString(),
         payload: {
+          cardsToTake: nextState.cardsToTake,
           allowedops: [],
           myindex: index,
           stacksize: nextState.stack?.length,
@@ -172,9 +176,34 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     this.randomvalue = Math.random();
     this.signalr.addHandler(Game1Ops.join, value => this.joinGame(value));
     this.signalr.addHandler(Game1Ops.querygames, value => this.querygames(value));
+    this.signalr.addHandler(Game1Ops.drawcard, value => this.drawcard(value));
     // const observablestate$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
     // this.subscriptions.push(observablestate$.subscribe(this.state$));
   }
+  drawcard(value: ISignalrMessage<unknown>): void {
+    const currentState = this.state$.value;
+    const playerindex = currentState.joinedplayers.findIndex(g => g.toString() === value.connectionid!);
+    if (playerindex === -1) {
+      // player not found
+      return
+    }
+    if (currentState.turn !== playerindex) {
+      // player is not on turn
+      return
+    }
+
+    const nextState = produce(currentState, draft => {
+      const newstack = currentState.stack?.slice();
+      const newplayers = currentState.players.slice();
+      const newplayer = currentState.players[playerindex].slice();
+      const drawcard = draft.stack?.pop();
+      draft.players[playerindex].push(drawcard!);
+    });
+
+    this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
+    this.sendPlayerStates(nextState);
+  }
+
   querygames(value: ISignalrMessage<unknown>): void {
     this.signalr.sendSignalrMessage({
       type: Game1Ops.querygamesresult,

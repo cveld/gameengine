@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Guid } from 'guid-typescript';
 import { Observable } from 'rxjs';
+import { CardTypeEnum, ICard, SpecialEnum } from 'src/app/card/card.models';
 import { Player1Service } from 'src/app/game1/player1/player1.service';
 import { IPlayer1State } from '../shared/player1.models';
 
@@ -19,6 +20,11 @@ export class Player1Component implements OnInit, OnDestroy {
   ngOnInit(): void {
   }
 
+  covered: ICard = {
+    special: SpecialEnum.covered,
+    type: CardTypeEnum.special
+  };
+
   player1Service?: Player1Service;
   state$?: Observable<IPlayer1State>;
   setState(state: Player1Service) {
@@ -36,5 +42,12 @@ export class Player1Component implements OnInit, OnDestroy {
   join(guidstr: string) {
     const guid = Guid.parse(guidstr);
     this.player1Service?.joinGame(guid);
+  }
+
+  playCard(index: number) {
+    this.player1Service?.playCard(index);
+  }
+  drawCard() {
+    this.player1Service?.drawCard();
   }
 }

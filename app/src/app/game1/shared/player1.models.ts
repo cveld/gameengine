@@ -2,6 +2,8 @@ import { Guid } from "guid-typescript";
 import { ICard } from "src/app/card/card.models";
 
 export interface IPlayer1State {
+  gameid?: Guid;
+  cardsToTake?: number;
   stacksize?: number;
   playedcards?: Array<ICard>;
   myturn?: boolean;

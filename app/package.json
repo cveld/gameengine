@@ -12,8 +12,8 @@
   "private": true,
   "dependencies": {
     "@angular/animations": "~12.2.0",
-    "@angular/compiler": "~12.2.0",
     "@angular/common": "~12.2.0",
+    "@angular/compiler": "~12.2.0",
     "@angular/core": "~12.2.0",
     "@angular/forms": "~12.2.0",
     "@angular/platform-browser": "~12.2.0",
@@ -25,6 +25,7 @@
     "bootstrap": "^5.0.2",
     "bootstrap-icons": "^1.5.0",
     "guid-typescript": "^1.0.9",
+    "immer": "^9.0.5",
     "rxjs": "~6.5.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.11.4"

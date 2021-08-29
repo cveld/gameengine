@@ -30,6 +30,7 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
     const nextState: IPlayer1State = {
       ...currentState,
       ...value.payload,
+      gameid: Guid.parse(value.gameid!),
       joinedplayers: (value.payload?.joinedplayers as any)?.map((v: any) => Guid.parse(v.value))
     }
     this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
@@ -81,6 +82,26 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
       usertype: UserTypeEnum.player,
       connectionid: this.guid?.toString(),
       gameid: guid.toString()
+    }).subscribe();
+  }
+
+  drawCard() {
+    const currentState = this.state$?.value;
+    this.signalr.sendSignalrMessage({
+      type: Game1Ops.drawcard,
+      usertype: UserTypeEnum.player,
+      connectionid: this.guid?.toString(),
+      gameid: currentState.gameid?.toString()
+    }).subscribe();
+  }
+  playCard(index: number) {
+    const currentState = this.state$?.value;
+    this.signalr.sendSignalrMessage({
+      type: Game1Ops.playcard,
+      usertype: UserTypeEnum.player,
+      connectionid: this.guid?.toString(),
+      gameid: currentState.gameid?.toString(),
+      payload: index
     }).subscribe();
   }
 }
