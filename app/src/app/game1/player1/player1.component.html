@@ -10,6 +10,7 @@
     <h1>Game state</h1>
     <div>My turn = {{state.myturn}}</div>
     <div>Cards to take = {{state.cardsToTake}}</div>
+    <div>Direction = {{state.direction}}</div>
     <div>Last round result = {{state.lastroundresult}}<span *ngIf="state.myindex === state.lastroundresult"> (me)</span></div>
     <ng-container *ngIf="state.playedcards">
       <h2>Played (count = {{state.playedcards?.length}})</h2>

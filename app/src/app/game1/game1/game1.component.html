@@ -1,3 +1,4 @@
+<div class="container">
 <ng-container *ngIf="state$ | async as state">
   <p>game1 id: {{game1Service?.guid}}</p>
   <p>{{value}}</p>
@@ -14,9 +15,12 @@
 </li></ol>
 
 <h1>Actions</h1>
-<button class="btn btn-primary mr-2" (click)="startGameClicked()">Start game</button>
-<button class="btn btn-primary" (click)="stopGameClicked()">Stop game</button>
-
+<div class="row">
+  <div class="md-12">
+    <button class="btn btn-primary mr-1" (click)="startGameClicked()">Start game</button>
+    <button class="btn btn-primary" (click)="stopGameClicked()">Stop game</button>
+  </div>
+</div>
 <h1>Joined players</h1>
 <ol><li *ngFor="let joinedplayer of state.joinedplayers">{{joinedplayer}}</li></ol>
 
@@ -24,6 +28,7 @@
 <div>Game started = {{state.started}}</div>
 <div *ngIf="state.turn">Player's turn = {{state.joinedplayers[state.turn]}}</div>
 <div *ngIf="state.cardsToTake">Cards to take = {{state.cardsToTake}}</div>
+<div *ngIf="state.direction">Direction = {{state.direction}}</div>
 
   <h1 *ngIf="state.players">Cards</h1>
   <ng-container *ngFor="let player of state.players; index as i">
@@ -39,3 +44,5 @@
     <app-card *ngFor="let card of state.stack" [card]="card"></app-card>
   </ng-container>
 </ng-container>
+
+</div>

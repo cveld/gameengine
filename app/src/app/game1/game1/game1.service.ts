@@ -15,20 +15,22 @@ import { cpuUsage } from 'process';
 import { CardTypeEnum, ICard, SpecialEnum, getSuitColor, suits, SuitEnum, getCoveredCards } from 'src/app/card/card.models';
 import { IPlayer1State } from '../shared/player1.models';
 import { updateItem } from '@ngxs/store/operators';
-import { produce } from 'immer';
+import { Draft, produce } from 'immer';
+import { DirectionEnum } from '../shared/game1.models';
+import { Dir } from 'fs';
 
 export interface IGame1State {
   started: boolean;
   joinedplayers: Array<Guid>;
   players: Array<Array<ICard>>;
   turn?: number; // which player has the turn
+  direction?: DirectionEnum;
   roundstarted?: boolean;
   stack?: Array<ICard>;
   playedcards?: Array<ICard>;
   lastroundresult?: number;
   cardsToTake?: number; // adding jokers and 2's
 }
-
 
 export enum MessageTypeEnum {
   undefined = 'undefined',
@@ -126,6 +128,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
       started: true,
       playedcards: playedcards,
       players: players,
+      direction: DirectionEnum.clockwise,
       turn: 0,
       cardsToTake: 0,
       roundstarted: true,
@@ -151,10 +154,11 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
           myindex: index,
           stacksize: nextState.stack?.length,
           myturn: nextState.turn === index,
+          direction: nextState.direction,
           lastroundresult: nextState.lastroundresult,
           playedcards: nextState.playedcards,
           joinedplayers: nextState.joinedplayers,
-          mycards: nextState.players[index],
+          mycards: nextState.players?.[index],
           players: players,
           roundstarted: nextState.roundstarted
         } as IPlayer1State
@@ -182,6 +186,11 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     // const observablestate$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
     // this.subscriptions.push(observablestate$.subscribe(this.state$));
   }
+
+  takeLast<T>(array: Array<T>) {
+    return array[array.length-1];
+  }
+
   playcard(value: ISignalrMessage<IPlaycard>): void {
     if (value.gameid !== this.guid?.toString()) {
       return;
@@ -199,16 +208,92 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
 
     const playcard = currentState.players[playerindex][value.payload?.index!];
 
+    // validate if played card is allowed
+    if (currentState.cardsToTake! > 0) {
+      // only jokers or 2's are allowed in this game state
+      if (playcard.number === 1 // 2
+         || playcard.special === SpecialEnum.joker)  {
+           // passthrough
+      } else {
+        return;
+      }
+    } else {
+      if (playcard.special === SpecialEnum.joker || playcard.number === 10) {
+        // Joker or Jack passes through
+      } else {
+        const topcard = this.takeLast(currentState.playedcards!);
+        if (playcard.suit === topcard.suit || playcard.number === topcard.number) {
+          // same suit or same number passes through
+        }
+        else {
+          // other cards are not allowed
+          this.messages.push({
+            type: MessageTypeEnum.error,
+            message: "Card not allowed"
+          })
+          return;
+        }
+      }
+    }
+
+    // validations passed. Selected card can be played.
+
     const nextState = produce(currentState, draft => {
       draft.players[playerindex].splice(value.payload?.index!, 1);
-      if (draft.players[playerindex].length === 0) {
-        draft.lastroundresult = playerindex;
-      }
       draft.playedcards?.push(playcard);
-      draft.turn = (draft.turn!+1) % draft.joinedplayers.length;
+      if (playcard.special === SpecialEnum.joker) {
+        // player plays a joker. Other player must draw 5 cards if not countered
+        draft.cardsToTake! += 5;
+      }
+      if (playcard.number === 1) {
+        // player plays a 2. Other player must draw 2 cards if not countered
+        draft.cardsToTake! += 2;
+      }
+
+      // check if player's hand is empty
+      if (draft.players[playerindex].length === 0) {
+        // check if player ending with last card flag correctly
+        // and, if it not a pest card
+        if (!value.payload?.sayLastCard || this.IsPestCard(playcard)) {
+          // if so, the player gets a penalty card
+          this.drawonecard(draft, playerindex);
+        }
+        else {
+          // if not, the round ends
+          draft.lastroundresult = playerindex;
+          draft.roundstarted = false;
+          draft.turn = -1; // end of round, nobody is on turn
+        }
+      }
+
+      if (draft.roundstarted) {
+        switch (playcard.number) {
+          case 6:
+            // player plays 7. Keeps the turn
+            break;
+          case 7:
+            // player plays 8. Next player is skipped
+            this.nextTurn(draft, 2);
+            break;
+          // @ts-expect-error
+          // allow for falling through the case statement
+          case 0:
+            // player plays ace. Game's direction changes
+            draft.direction = draft.direction === DirectionEnum.clockwise ? DirectionEnum.counterclockwise : DirectionEnum.clockwise;
+          default:
+            this.nextTurn(draft, 1);
+        }
+      }
     });
     this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
     this.sendPlayerStates(nextState);
+  }
+  // utility function that draws one card from the stack
+  // and adds it to the active player's hand.
+  // also, if the stack is depleted, cleans up played card, and reshuffles the stack
+  drawonecard(draft: Draft<IGame1State>, playerindex: number) {
+    const drawcard = draft.stack?.pop();
+    draft.players[playerindex].push(drawcard!);
   }
   drawcard(value: ISignalrMessage<unknown>): void {
     if (value.gameid !== this.guid?.toString()) {
@@ -228,14 +313,23 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     const nextState = produce(currentState, draft => {
       const numberOfCards = draft.cardsToTake === 0 ? 1 : draft.cardsToTake!;
       for (let i = 0; i < numberOfCards; i++) {
-        const drawcard = draft.stack?.pop();
-        draft.players[playerindex].push(drawcard!);
+        this.drawonecard(draft, playerindex);
       }
-      draft.turn = (draft.turn!+1) % draft.joinedplayers.length;
+      draft.cardsToTake = 0;
+      this.nextTurn(draft, 1);
     });
 
     this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
     this.sendPlayerStates(nextState);
+  }
+
+  nextTurn(draft: Draft<IGame1State>, increment: number) {
+    if (draft.direction === DirectionEnum.clockwise) {
+      draft.turn = (draft.turn!+increment) % draft.joinedplayers.length;
+    } else {
+      draft.turn = (draft.turn!-increment) % draft.joinedplayers.length;
+    }
+
   }
 
   querygames(value: ISignalrMessage<unknown>): void {
