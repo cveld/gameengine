@@ -1,3 +1,4 @@
+<div class="container">
 <ng-container *ngIf="state$ | async as state">
 <p>player1 id: {{player1Service?.guid}}</p>
 
@@ -11,6 +12,7 @@
     <div>My turn = {{state.myturn}}</div>
     <div>Cards to take = {{state.cardsToTake}}</div>
     <div>Direction = {{state.direction}}</div>
+    <div *ngIf="state.selectedSuit">Selected suit = {{state.selectedSuit}}</div>
     <div>Last round result = {{state.lastroundresult}}<span *ngIf="state.myindex === state.lastroundresult"> (me)</span></div>
     <ng-container *ngIf="state.playedcards">
       <h2>Played (count = {{state.playedcards?.length}})</h2>
@@ -26,6 +28,19 @@
         Say last card
       </label>
     </div>
+    <div class="row">
+      <div class="md-4">
+    <div class="form-group">
+      <label for="selectSuit">Select suit</label>
+      <select class="form-control" id="selectSuit" [(ngModel)]="selectSuit">
+        <option value="hearts">Hearts</option>
+        <option value="spades">Spades</option>
+        <option value="diamonds">Diamonds</option>
+        <option value="clubs">Clubs</option>
+      </select>
+    </div>
+  </div>
+  </div>
 
     <h1>Other cards</h1>
     <table>
@@ -34,3 +49,4 @@
     </table>
   </ng-container>
 </ng-container>
+</div>

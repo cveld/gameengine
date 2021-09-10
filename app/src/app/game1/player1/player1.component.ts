@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Guid } from 'guid-typescript';
 import { Observable } from 'rxjs';
-import { CardTypeEnum, ICard, SpecialEnum } from 'src/app/card/card.models';
+import { CardTypeEnum, ICard, SpecialEnum, SuitEnum } from 'src/app/card/card.models';
 import { Player1Service } from 'src/app/game1/player1/player1.service';
 import { IPlayer1State } from '../shared/player1.models';
 
@@ -45,11 +45,12 @@ export class Player1Component implements OnInit, OnDestroy {
   }
 
   sayLastCard: boolean = false;
+  selectSuit: string = 'Hearts';
 
   playCard(index: number) {
-    this.player1Service?.playCard(index, this.sayLastCard);
+    this.player1Service?.playCard(index, this.sayLastCard, SuitEnum[this.selectSuit as keyof typeof SuitEnum]);
   }
   drawCard() {
-    this.player1Service?.drawCard();
+    this.player1Service?.drawCard(SuitEnum[this.selectSuit as keyof typeof SuitEnum]);
   }
 }

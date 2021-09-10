@@ -1,3 +1,5 @@
+import { SuitEnum } from "src/app/card/card.models";
+
 export enum Game1Ops {
   undefined = 'undefined',
   querygames = 'game1.querygames',  // the player sends to all games
@@ -11,4 +13,9 @@ export enum Game1Ops {
 export interface IPlaycard {
   index: number;
   sayLastCard: boolean;
+  selectSuit: SuitEnum;
+}
+
+export interface IDrawcard {
+  selectSuit: SuitEnum;
 }

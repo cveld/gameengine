@@ -10,7 +10,7 @@ import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { IUserState } from 'src/app/shared/IUserState';
 import { ISignalrMessage, UserTypeEnum } from 'src/app/shared/signalrmodels';
-import { Game1Ops, IPlaycard } from '../shared/ops';
+import { Game1Ops, IDrawcard, IPlaycard } from '../shared/ops';
 import { cpuUsage } from 'process';
 import { CardTypeEnum, ICard, SpecialEnum, getSuitColor, suits, SuitEnum, getCoveredCards } from 'src/app/card/card.models';
 import { IPlayer1State } from '../shared/player1.models';
@@ -30,6 +30,7 @@ export interface IGame1State {
   playedcards?: Array<ICard>;
   lastroundresult?: number;
   cardsToTake?: number; // adding jokers and 2's
+  selectedSuit?: SuitEnum;
 }
 
 export enum MessageTypeEnum {
@@ -155,6 +156,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
           stacksize: nextState.stack?.length,
           myturn: nextState.turn === index,
           direction: nextState.direction,
+          selectedSuit: nextState.selectedSuit,
           lastroundresult: nextState.lastroundresult,
           playedcards: nextState.playedcards,
           joinedplayers: nextState.joinedplayers,
@@ -181,7 +183,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     this.randomvalue = Math.random();
     this.signalr.addHandler(Game1Ops.join, value => this.joinGame(value));
     this.signalr.addHandler(Game1Ops.querygames, value => this.querygames(value));
-    this.signalr.addHandler(Game1Ops.drawcard, value => this.drawcard(value));
+    this.signalr.addHandler<IDrawcard>(Game1Ops.drawcard, value => this.drawcard(value));
     this.signalr.addHandler<IPlaycard>(Game1Ops.playcard, value => this.playcard(value));
     // const observablestate$ = this.store.select(UserStateState.userstate).pipe(map(filterFn => filterFn(this.guid)));
     // this.subscriptions.push(observablestate$.subscribe(this.state$));
@@ -222,7 +224,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
         // Joker or Jack passes through
       } else {
         const topcard = this.takeLast(currentState.playedcards!);
-        if (playcard.suit === topcard.suit || playcard.number === topcard.number) {
+        if ((topcard.special === SpecialEnum.joker && currentState.selectedSuit === playcard.suit) || playcard.suit === topcard.suit || playcard.number === topcard.number) {
           // same suit or same number passes through
         }
         else {
@@ -236,6 +238,9 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
       }
     }
 
+    if (playcard.number === 10 && !this.validSuit(value.payload?.selectSuit)) {
+      return;
+    }
     // validations passed. Selected card can be played.
 
     const nextState = produce(currentState, draft => {
@@ -248,6 +253,10 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
       if (playcard.number === 1) {
         // player plays a 2. Other player must draw 2 cards if not countered
         draft.cardsToTake! += 2;
+      }
+      if (playcard.number === 10) {
+        // jack is played. Game takes input suit
+        draft.selectedSuit = value.payload?.selectSuit;
       }
 
       // check if player's hand is empty
@@ -288,6 +297,19 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
     this.sendPlayerStates(nextState);
   }
+
+  validSuit(suit?: SuitEnum) {
+    switch (suit) {
+      case SuitEnum.spades:
+      case SuitEnum.clubs:
+      case SuitEnum.diamonds:
+      case SuitEnum.hearts:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   // utility function that draws one card from the stack
   // and adds it to the active player's hand.
   // also, if the stack is depleted, cleans up played card, and reshuffles the stack
@@ -295,7 +317,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     const drawcard = draft.stack?.pop();
     draft.players[playerindex].push(drawcard!);
   }
-  drawcard(value: ISignalrMessage<unknown>): void {
+  drawcard(value: ISignalrMessage<IDrawcard>): void {
     if (value.gameid !== this.guid?.toString()) {
       return;
     }
@@ -310,7 +332,15 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
       return
     }
 
+    const topcard = this.takeLast(currentState.playedcards!);
+    if (topcard.special === SpecialEnum.joker && !this.validSuit(value.payload?.selectSuit)) {
+      return;
+    }
+
     const nextState = produce(currentState, draft => {
+      if (topcard.special === SpecialEnum.joker) {
+        draft.selectedSuit = value.payload?.selectSuit;
+      }
       const numberOfCards = draft.cardsToTake === 0 ? 1 : draft.cardsToTake!;
       for (let i = 0; i < numberOfCards; i++) {
         this.drawonecard(draft, playerindex);
@@ -327,7 +357,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
     if (draft.direction === DirectionEnum.clockwise) {
       draft.turn = (draft.turn!+increment) % draft.joinedplayers.length;
     } else {
-      draft.turn = (draft.turn!-increment) % draft.joinedplayers.length;
+      draft.turn = (draft.turn!-increment+draft.joinedplayers.length) % draft.joinedplayers.length;
     }
 
   }

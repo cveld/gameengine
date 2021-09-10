@@ -3,13 +3,14 @@ import { Store } from '@ngxs/store';
 import { Guid } from 'guid-typescript';
 import { BehaviorSubject, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { SuitEnum } from 'src/app/card/card.models';
 import { IStateguidConsumer } from 'src/app/shared/IStateguidConsumer';
 import { ISignalrMessage, UserTypeEnum } from 'src/app/shared/signalrmodels';
 import { UpdateUserStateAction } from 'src/app/store/userstate/userstate.actions';
 import { UserStateState } from 'src/app/store/userstate/userstate.state';
 import { SignalrService } from '../../services/signalr/SignalrService';
 import { Game1Service } from '../game1/game1.service';
-import { Game1Ops, IPlaycard } from '../shared/ops';
+import { Game1Ops, IDrawcard, IPlaycard } from '../shared/ops';
 import { IPlayer1State } from '../shared/player1.models';
 
 @Injectable()
@@ -85,16 +86,19 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
     }).subscribe();
   }
 
-  drawCard() {
+  drawCard(selectSuit: SuitEnum) {
     const currentState = this.state$?.value;
-    this.signalr.sendSignalrMessage({
+    this.signalr.sendSignalrMessage<IDrawcard>({
       type: Game1Ops.drawcard,
       usertype: UserTypeEnum.player,
       connectionid: this.guid?.toString(),
-      gameid: currentState.gameid?.toString()
+      gameid: currentState.gameid?.toString(),
+      payload: {
+        selectSuit: selectSuit
+      }
     }).subscribe();
   }
-  playCard(index: number, sayLastCard: boolean) {
+  playCard(index: number, sayLastCard: boolean, selectSuit: SuitEnum) {
     const currentState = this.state$?.value;
     this.signalr.sendSignalrMessage<IPlaycard>({
       type: Game1Ops.playcard,
@@ -103,7 +107,8 @@ export class Player1Service implements IStateguidConsumer, OnDestroy {
       gameid: currentState.gameid?.toString(),
       payload: {
         index: index,
-        sayLastCard: sayLastCard
+        sayLastCard: sayLastCard,
+        selectSuit: selectSuit
       }
     }).subscribe();
   }

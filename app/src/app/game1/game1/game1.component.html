@@ -29,6 +29,7 @@
 <div *ngIf="state.turn">Player's turn = {{state.joinedplayers[state.turn]}}</div>
 <div *ngIf="state.cardsToTake">Cards to take = {{state.cardsToTake}}</div>
 <div *ngIf="state.direction">Direction = {{state.direction}}</div>
+<div *ngIf="state.selectedSuit">Selected suit = {{state.selectedSuit}}</div>
 
   <h1 *ngIf="state.players">Cards</h1>
   <ng-container *ngFor="let player of state.players; index as i">
