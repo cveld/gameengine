@@ -224,7 +224,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
         // Joker or Jack passes through
       } else {
         const topcard = this.takeLast(currentState.playedcards!);
-        if (topcard.number === 10 && playcard.suit !== value.payload?.selectSuit) {
+        if (topcard.number === 10 && playcard.suit !== currentState.selectedSuit) {
           return;
         }
         if ((topcard.special === SpecialEnum.joker && currentState.selectedSuit === playcard.suit) || playcard.suit === topcard.suit || playcard.number === topcard.number) {
