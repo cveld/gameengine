@@ -7,7 +7,7 @@
 <h1>Games found</h1>
 <p *ngFor="let game of games | keyvalue">{{game.key}} <button class="btn btn-primary" (click)="join(game.key)">Join</button></p>
 
-  <ng-container *ngIf="state.roundstatus !== RoundStatusEnum.notstarted">
+  <ng-container *ngIf="state.roundstatus && state.roundstatus !== RoundStatusEnum.notstarted">
     <h1>Game state</h1>
     <div>My turn = {{state.myturn}}</div>
     <div>Cards to take = {{state.cardsToTake}}</div>
