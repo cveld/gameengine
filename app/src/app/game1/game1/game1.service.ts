@@ -220,14 +220,11 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
         return;
       }
     } else {
-      if (playcard.special === SpecialEnum.joker || playcard.number === 10) {
+      const topcard = this.takeLast(currentState.playedcards!);
+      if (playcard.special === SpecialEnum.joker || playcard.number === 10 || ((topcard.special === SpecialEnum.joker || topcard.number === 10) && currentState.selectedSuit === playcard.suit)) {
         // Joker or Jack passes through
       } else {
-        const topcard = this.takeLast(currentState.playedcards!);
-        if (topcard.number === 10 && playcard.suit !== currentState.selectedSuit) {
-          return;
-        }
-        if ((topcard.special === SpecialEnum.joker && currentState.selectedSuit === playcard.suit) || playcard.suit === topcard.suit || playcard.number === topcard.number) {
+        if (topcard.number !== 10 && topcard.special !== SpecialEnum.joker && (playcard.suit === topcard.suit || playcard.number === topcard.number)) {
           // same suit or same number passes through
         }
         else {
