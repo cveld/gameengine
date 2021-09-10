@@ -1,6 +1,6 @@
 import { Guid } from "guid-typescript";
 import { ICard, SuitEnum } from "src/app/card/card.models";
-import { DirectionEnum } from "./game1.models";
+import { DirectionEnum, RoundStatusEnum } from "./game1.models";
 
 export interface IPlayer1State {
   gameid?: Guid;
@@ -15,7 +15,7 @@ export interface IPlayer1State {
   mycards?: Array<ICard>;
   players?: Array<number>;
   allowedops?: Array<string>;
-  roundstarted?: boolean;
+  roundstatus?: RoundStatusEnum;
   lastroundresult?: number; // which player has won
 }
 

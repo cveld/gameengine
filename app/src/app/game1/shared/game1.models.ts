@@ -1,5 +1,10 @@
 export enum DirectionEnum {
-  undefined = "undefined",
   clockwise = "clockwise",
   counterclockwise = "counterclockwise"
+}
+
+export enum RoundStatusEnum {
+  notstarted = "notstarted",
+  started = "started",
+  finished = "finished"
 }

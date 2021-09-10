@@ -16,7 +16,7 @@ import { CardTypeEnum, ICard, SpecialEnum, getSuitColor, suits, SuitEnum, getCov
 import { IPlayer1State } from '../shared/player1.models';
 import { updateItem } from '@ngxs/store/operators';
 import { Draft, produce } from 'immer';
-import { DirectionEnum } from '../shared/game1.models';
+import { DirectionEnum, RoundStatusEnum } from '../shared/game1.models';
 import { Dir } from 'fs';
 
 export interface IGame1State {
@@ -25,7 +25,7 @@ export interface IGame1State {
   players: Array<Array<ICard>>;
   turn?: number; // which player has the turn
   direction?: DirectionEnum;
-  roundstarted?: boolean;
+  roundstatus?: RoundStatusEnum;
   stack?: Array<ICard>;
   playedcards?: Array<ICard>;
   lastroundresult?: number;
@@ -132,7 +132,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
       direction: DirectionEnum.clockwise,
       turn: 0,
       cardsToTake: 0,
-      roundstarted: true,
+      roundstatus: RoundStatusEnum.started,
       stack: stack
     };
     this.store.dispatch(new UpdateUserStateAction(this.guid!, nextState));
@@ -162,7 +162,7 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
           joinedplayers: nextState.joinedplayers,
           mycards: nextState.players?.[index],
           players: players,
-          roundstarted: nextState.roundstarted
+          roundstatus: nextState.roundstatus
         } as IPlayer1State
       }).subscribe();
     });
@@ -224,6 +224,9 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
         // Joker or Jack passes through
       } else {
         const topcard = this.takeLast(currentState.playedcards!);
+        if (topcard.number === 10 && playcard.suit !== value.payload?.selectSuit) {
+          return;
+        }
         if ((topcard.special === SpecialEnum.joker && currentState.selectedSuit === playcard.suit) || playcard.suit === topcard.suit || playcard.number === topcard.number) {
           // same suit or same number passes through
         }
@@ -270,12 +273,12 @@ export class Game1Service implements IStateguidConsumer, OnDestroy {
         else {
           // if not, the round ends
           draft.lastroundresult = playerindex;
-          draft.roundstarted = false;
+          draft.roundstatus = RoundStatusEnum.finished;
           draft.turn = -1; // end of round, nobody is on turn
         }
       }
 
-      if (draft.roundstarted) {
+      if (draft.roundstatus === RoundStatusEnum.started) {
         switch (playcard.number) {
           case 6:
             // player plays 7. Keeps the turn
