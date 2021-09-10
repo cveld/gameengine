@@ -1,0 +1,12 @@
+<ul class="nav nav-tabs">
+  <li class="nav-item">
+      <a class="nav-link" routerLink="create" routerLinkActive="active">Create</a>
+  </li>
+  <li class="nav-item" *ngFor="let tab of (tabs$|async)|keyvalue; let i = index">
+    <a class="nav-link" routerLink="tabs/{{i}}" routerLinkActive="active">
+    {{tab.value?.title}}
+    </a>
+  </li>
+</ul>
+
+<router-outlet></router-outlet>
