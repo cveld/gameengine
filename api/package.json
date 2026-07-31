@@ -7,7 +7,7 @@
   "scripts": {
     "build:production": "npm run prestart && npm prune --production",
     "watch": "webpack --config webpack/webpack.dev.js --watch",
-    "build": "webpack --config webpack/webpack.prod.js",
+    "build": "NODE_OPTIONS=--openssl-legacy-provider webpack --config webpack/webpack.prod.js",
     "prestart": "npm run build && func extensions install",
     "start:host": "func start",
     "start": "npm-run-all --parallel start:host watch",
