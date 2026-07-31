@@ -74,6 +74,10 @@ export class SignalrService implements OnDestroy {
     this.connection.on(type, handler);
   }
 
+  removeHandler<T>(type: string, handler: (message: ISignalrMessage<T>) => void) {
+    this.connection.off(type, handler);
+  }
+
   sendSignalrMessage<T>(message: ISignalrMessage<T>) {
     return this.httpClient.post(`${environment.apiBaseUrl}/api/messages`, {
           ...message
