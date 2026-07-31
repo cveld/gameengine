@@ -9,6 +9,8 @@ import { TabcreatorComponent } from "./tabcreator/tabcreator.component";
 import { TabhostComponent } from "./tabhost/tabhost.component";
 import { TabmanagerComponent } from "./tabmanager/tabmanager.component";
 import { DebugComponent } from "./debugtab/debug.component";
+import { HomeComponent } from "../home/home.component";
+import { MemoryComponent } from "../memory/memory.component";
 
 @NgModule({
   declarations: [
@@ -18,7 +20,9 @@ import { DebugComponent } from "./debugtab/debug.component";
     TabhostComponent,
     Game1Component,
     CardComponent,
-    DebugComponent
+    DebugComponent,
+    HomeComponent,
+    MemoryComponent
   ],
   imports: [
     AppRoutingModule,

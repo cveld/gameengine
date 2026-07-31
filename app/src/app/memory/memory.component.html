@@ -1,0 +1,65 @@
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Geheugenspel</h1>
+    <a routerLink="/" class="btn btn-outline-secondary btn-sm">Terug naar start</a>
+  </div>
+
+  <div *ngIf="!joined" class="card mb-4" style="max-width: 400px;">
+    <div class="card-body">
+      <label for="playerName" class="form-label">Jouw naam</label>
+      <div class="input-group">
+        <input id="playerName" class="form-control" [(ngModel)]="name" (keyup.enter)="join()" placeholder="Naam" autofocus>
+        <button class="btn btn-primary" (click)="join()">Meedoen</button>
+      </div>
+    </div>
+  </div>
+
+  <ng-container *ngIf="joined">
+    <div class="row">
+      <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>Zetten: <strong>{{ moves }}</strong></div>
+          <button class="btn btn-sm btn-outline-secondary" (click)="newBoard()">Nieuw spel</button>
+        </div>
+
+        <div *ngIf="finished" class="alert alert-success">
+          Opgelost in {{ moves }} zetten! Goed gedaan, {{ memoryService.name }}.
+        </div>
+
+        <div class="memory-board">
+          <div *ngFor="let card of cards; trackBy: trackByIndex"
+               class="memory-tile"
+               [class.flipped]="card.flipped || card.matched"
+               [class.matched]="card.matched"
+               (click)="flip(card)">
+            <div class="memory-tile-inner">
+              <div class="memory-tile-front">?</div>
+              <div class="memory-tile-back">{{ card.symbol }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <h2 class="h5">Wie speelt er ({{ (presence$ | async)?.size ?? 0 }})</h2>
+        <ul class="list-group mb-4">
+          <li class="list-group-item" *ngFor="let entry of (presence$ | async) | keyvalue">
+            {{ entry.value.name }}
+          </li>
+        </ul>
+
+        <h2 class="h5">Resultatenhistorie</h2>
+        <table class="table table-sm">
+          <thead><tr><th>Naam</th><th>Zetten</th><th>Tijd</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let result of results$ | async">
+              <td>{{ result.name }}</td>
+              <td>{{ result.moves }}</td>
+              <td>{{ (result.durationMs / 1000) | number:'1.1-1' }}s</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </ng-container>
+</div>
