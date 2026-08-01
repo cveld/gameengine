@@ -1,7 +1,12 @@
 <div class="container py-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Geheugenspel</h1>
-    <a routerLink="/" class="btn btn-outline-secondary btn-sm">Terug naar start</a>
+    <div class="d-flex gap-2">
+      <button *ngIf="joined" class="btn btn-outline-secondary btn-sm" (click)="switchProfile()">
+        <i class="bi bi-person-circle"></i> {{ name }} &middot; Wissel
+      </button>
+      <a routerLink="/" class="btn btn-outline-secondary btn-sm">Terug naar start</a>
+    </div>
   </div>
 
   <div *ngIf="!joined" class="card mb-4" style="max-width: 400px;">
@@ -10,6 +15,9 @@
       <div class="input-group">
         <input id="playerName" class="form-control" [(ngModel)]="name" (keyup.enter)="join()" placeholder="Naam" autofocus>
         <button class="btn btn-primary" (click)="join()">Meedoen</button>
+      </div>
+      <div *ngIf="recentProfiles.length" class="d-flex flex-wrap gap-1 mt-2">
+        <button *ngFor="let p of recentProfiles" type="button" class="btn btn-sm btn-outline-secondary" (click)="joinAs(p)">{{ p }}</button>
       </div>
     </div>
   </div>

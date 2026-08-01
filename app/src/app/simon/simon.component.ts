@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { GameHistoryService } from '../services/history/game-history.service';
+import { ProfileService } from '../services/profile/profile.service';
 import { ISimonResult, SimonColor } from './simon.models';
 
 const HISTORY_GAME_KEY = 'simon';
@@ -13,10 +14,11 @@ const STEP_DELAY_MS = 600;
 })
 export class SimonComponent implements OnInit {
 
-  constructor(private history: GameHistoryService) { }
+  constructor(private history: GameHistoryService, private profile: ProfileService) { }
 
   name = '';
   joined = false;
+  recentProfiles: string[] = [];
 
   playing = false;
   showingSequence = false;
@@ -31,11 +33,30 @@ export class SimonComponent implements OnInit {
 
   ngOnInit(): void {
     this.results = this.loadResults();
+    this.recentProfiles = this.profile.getRecentProfiles();
+    const active = this.profile.getActiveProfile();
+    if (active) {
+      this.joinAs(active);
+    }
   }
 
   join() {
     if (!this.name.trim()) return;
+    this.joinAs(this.name.trim());
+  }
+
+  joinAs(name: string) {
+    this.name = name;
+    this.profile.setActiveProfile(name);
+    this.recentProfiles = this.profile.getRecentProfiles();
     this.joined = true;
+  }
+
+  switchProfile() {
+    this.profile.clearActiveProfile();
+    this.name = '';
+    this.joined = false;
+    this.playing = false;
   }
 
   start() {

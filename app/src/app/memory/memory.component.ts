@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { MemoryService } from './memory.service';
 import { IMemoryCard } from './memory.models';
+import { ProfileService } from '../services/profile/profile.service';
 
 const SYMBOLS = ['🍎', '🍌', '🍇', '🍓', '🍒', '🍋', '🥝', '🍍'];
 
@@ -11,10 +12,11 @@ const SYMBOLS = ['🍎', '🍌', '🍇', '🍓', '🍒', '🍋', '🥝', '🍍']
 })
 export class MemoryComponent implements OnInit, OnDestroy {
 
-  constructor(public memoryService: MemoryService) { }
+  constructor(public memoryService: MemoryService, private profile: ProfileService) { }
 
   name = '';
   joined = false;
+  recentProfiles: string[] = [];
 
   presence$ = this.memoryService.presence$;
   results$ = this.memoryService.results$;
@@ -29,6 +31,11 @@ export class MemoryComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.newBoard();
+    this.recentProfiles = this.profile.getRecentProfiles();
+    const active = this.profile.getActiveProfile();
+    if (active) {
+      this.joinAs(active);
+    }
   }
 
   ngOnDestroy(): void {
@@ -37,8 +44,22 @@ export class MemoryComponent implements OnInit, OnDestroy {
 
   join() {
     if (!this.name.trim()) return;
-    this.memoryService.join(this.name.trim());
+    this.joinAs(this.name.trim());
+  }
+
+  joinAs(name: string) {
+    this.name = name;
+    this.profile.setActiveProfile(name);
+    this.recentProfiles = this.profile.getRecentProfiles();
+    this.memoryService.join(name);
     this.joined = true;
+  }
+
+  switchProfile() {
+    this.memoryService.leave();
+    this.profile.clearActiveProfile();
+    this.name = '';
+    this.joined = false;
   }
 
   newBoard() {
