@@ -1,0 +1,41 @@
+<div class="container">
+  <h1>SignalR debug</h1>
+
+  <p>
+    Connection state: <strong>{{ signalr.state$ | async }}</strong>
+    <button class="btn btn-sm btn-secondary ms-2" (click)="reconnect()">Reconnect</button>
+  </p>
+
+  <div class="alert alert-danger" *ngIf="signalr.lastError$ | async as lastError">
+    {{ lastError }}
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <button class="btn btn-primary" (click)="testNegotiate()">Test negotiate endpoint</button>
+      <div *ngIf="negotiateResult" class="mt-2" [class.text-danger]="!negotiateResult.success" [class.text-success]="negotiateResult.success">
+        <div>Status: {{ negotiateResult.status }} {{ negotiateResult.statusText }}</div>
+        <pre>{{ negotiateResult.body }}</pre>
+      </div>
+    </div>
+    <div class="col">
+      <button class="btn btn-primary" (click)="testSendMessage()">Send test message</button>
+      <div *ngIf="messageResult" class="mt-2" [class.text-danger]="!messageResult.success" [class.text-success]="messageResult.success">
+        <div *ngIf="messageResult.status">Status: {{ messageResult.status }} {{ messageResult.statusText }}</div>
+        <pre>{{ messageResult.body }}</pre>
+      </div>
+    </div>
+    <div class="col">
+      <button class="btn btn-primary" (click)="testReceiveMessage()">Receive test message</button>
+      <div *ngIf="receiveResult" class="mt-2" [class.text-danger]="!receiveResult.success" [class.text-success]="receiveResult.success">
+        <div *ngIf="receiveResult.status">Status: {{ receiveResult.status }} {{ receiveResult.statusText }}</div>
+        <pre>{{ receiveResult.body }}</pre>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="mt-3">Connection log</h2>
+  <ul class="list-unstyled">
+    <li *ngFor="let line of signalr.log$ | async">{{ line }}</li>
+  </ul>
+</div>

@@ -1,0 +1,52 @@
+<div class="container">
+<ng-container *ngIf="state$ | async as state">
+<p>player1 id: {{player1Service?.guid}}</p>
+
+<button class="btn btn-primary" (click)="queryGames()">Query games</button>
+
+<h1>Games found</h1>
+<p *ngFor="let game of games | keyvalue">{{game.key}} <button class="btn btn-primary" (click)="join(game.key)">Join</button></p>
+
+  <ng-container *ngIf="state.roundstatus && state.roundstatus !== RoundStatusEnum.notstarted">
+    <h1>Game state</h1>
+    <div>My turn = {{state.myturn}}</div>
+    <div>Cards to take = {{state.cardsToTake}}</div>
+    <div>Direction = {{state.direction}}</div>
+    <div *ngIf="state.selectedSuit">Selected suit = {{state.selectedSuit}}</div>
+    <div>Last round result = {{state.lastroundresult}}<span *ngIf="state.myindex === state.lastroundresult"> (me)</span></div>
+    <ng-container *ngIf="state.playedcards">
+      <h2>Played (count = {{state.playedcards?.length}})</h2>
+      <app-card *ngFor="let card of state.playedcards; index as i" [card]="state.playedcards![state.playedcards!.length-1-i]"></app-card>
+    </ng-container>
+    <h1>Stack ({{state.stacksize}})</h1>
+    <app-card [card]="covered" (click)="drawCard()" style="cursor: pointer"></app-card>
+    <h1>My cards</h1>
+    <app-card *ngFor="let card of state.mycards; index as i" [card]="card" (click)="playCard(i)" style="cursor: pointer"></app-card>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" [(ngModel)]="sayLastCard" id="sayLastCard">
+      <label class="form-check-label" for="sayLastCard">
+        Say last card
+      </label>
+    </div>
+    <div class="row">
+      <div class="md-4">
+    <div class="form-group">
+      <label for="selectSuit">Select suit</label>
+      <select class="form-control" id="selectSuit" [(ngModel)]="selectSuit">
+        <option value="hearts">Hearts</option>
+        <option value="spades">Spades</option>
+        <option value="diamonds">Diamonds</option>
+        <option value="clubs">Clubs</option>
+      </select>
+    </div>
+  </div>
+  </div>
+
+    <h1>Other cards</h1>
+    <table>
+      <thead><th>Player</th><th>Number of cards</th></thead>
+      <tr *ngFor="let player of state.players; index as i"><td>{{state.joinedplayers![i]}}<span *ngIf="state.myindex === i"> (me)</span></td><td>{{player}}</td></tr>
+    </table>
+  </ng-container>
+</ng-container>
+</div>

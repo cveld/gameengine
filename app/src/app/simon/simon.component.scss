@@ -1,0 +1,47 @@
+.simon-board {
+  display: grid;
+  grid-template-columns: repeat(2, 140px);
+  grid-template-rows: repeat(2, 140px);
+  gap: 10px;
+  padding: 10px;
+  background: #000;
+  border-radius: 50%;
+  max-width: 300px;
+}
+
+.simon-pad {
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+
+.simon-pad:disabled {
+  cursor: not-allowed;
+}
+
+.simon-pad.active {
+  opacity: 1;
+  transform: scale(0.97);
+}
+
+.simon-pad.green {
+  background: #2ecc71;
+  border-top-left-radius: 100px;
+}
+
+.simon-pad.red {
+  background: #e74c3c;
+  border-top-right-radius: 100px;
+}
+
+.simon-pad.yellow {
+  background: #f1c40f;
+  border-bottom-left-radius: 100px;
+}
+
+.simon-pad.blue {
+  background: #3498db;
+  border-bottom-right-radius: 100px;
+}

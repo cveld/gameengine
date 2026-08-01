@@ -1,0 +1,81 @@
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Simon Says</h1>
+    <div class="d-flex gap-2 align-items-center">
+      <span *ngIf="joined" class="badge rounded-pill text-bg-success">
+        <i class="bi bi-circle-fill" style="font-size: 0.5rem;"></i>
+        {{ (presence$ | async)?.size ?? 0 }} {{ (presence$ | async)?.size === 1 ? 'speler' : 'spelers' }} online
+      </span>
+      <button *ngIf="joined" class="btn btn-outline-secondary btn-sm" (click)="switchProfile()">
+        <i class="bi bi-person-circle"></i> {{ name }} &middot; Wissel
+      </button>
+      <a routerLink="/" class="btn btn-outline-secondary btn-sm">Terug naar start</a>
+    </div>
+  </div>
+
+  <div *ngIf="!joined" class="card mb-4" style="max-width: 400px;">
+    <div class="card-body">
+      <label for="playerName" class="form-label">Jouw naam</label>
+      <div class="input-group">
+        <input id="playerName" class="form-control" [(ngModel)]="name" (keyup.enter)="join()" placeholder="Naam" autofocus>
+        <button class="btn btn-primary" (click)="join()">Meedoen</button>
+      </div>
+      <div *ngIf="recentProfiles.length" class="d-flex flex-wrap gap-1 mt-2">
+        <button *ngFor="let p of recentProfiles" type="button" class="btn btn-sm btn-outline-secondary" (click)="joinAs(p)">{{ p }}</button>
+      </div>
+    </div>
+  </div>
+
+  <ng-container *ngIf="joined">
+    <div class="row">
+      <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>Score: <strong>{{ score }}</strong></div>
+          <button class="btn btn-sm btn-outline-secondary" (click)="start()" [disabled]="showingSequence">
+            {{ playing ? 'Opnieuw starten' : 'Start' }}
+          </button>
+        </div>
+
+        <p class="text-muted">{{ message }}</p>
+
+        <div class="simon-board">
+          <button type="button" class="simon-pad green" [class.active]="activeColor === 'green'"
+                  [disabled]="!playing || showingSequence" (click)="pick('green')"></button>
+          <button type="button" class="simon-pad red" [class.active]="activeColor === 'red'"
+                  [disabled]="!playing || showingSequence" (click)="pick('red')"></button>
+          <button type="button" class="simon-pad yellow" [class.active]="activeColor === 'yellow'"
+                  [disabled]="!playing || showingSequence" (click)="pick('yellow')"></button>
+          <button type="button" class="simon-pad blue" [class.active]="activeColor === 'blue'"
+                  [disabled]="!playing || showingSequence" (click)="pick('blue')"></button>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <h2 class="h5">Wie speelt er ({{ (presence$ | async)?.size ?? 0 }})</h2>
+        <ul class="list-group mb-4">
+          <li class="list-group-item" *ngFor="let entry of (presence$ | async) | keyvalue">
+            {{ entry.value.name }}
+          </li>
+          <li class="list-group-item text-muted" *ngIf="!(presence$ | async)?.size">
+            Niemand anders online.
+          </li>
+        </ul>
+
+        <h2 class="h5">Geschiedenis</h2>
+        <table class="table table-sm">
+          <thead><tr><th>Naam</th><th>Score</th><th>Datum</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let result of results$ | async">
+              <td>{{ result.name }}</td>
+              <td>{{ result.score }}</td>
+              <td>{{ result.completedAt | date:'short' }}</td>
+            </tr>
+            <tr *ngIf="!(results$ | async)?.length">
+              <td colspan="3" class="text-muted">Nog geen spellen gespeeld.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </ng-container>
+</div>

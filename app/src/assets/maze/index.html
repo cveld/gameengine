@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Dungeon Maze</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="game">
+    <header id="hud">
+      <h1>Dungeon Maze</h1>
+      <div class="stats">
+        <span class="stat" id="stat-score">⭐ 0</span>
+        <span class="stat" id="stat-key">🔑 <span id="key-state">?</span></span>
+        <span class="stat" id="stat-lives">❤️ <span id="lives-state">3</span></span>
+        <span class="stat" id="stat-level">🏰 1</span>
+      </div>
+      <button id="btn-new">Nieuwe Maze</button>
+    </header>
+
+    <div id="stage">
+      <canvas id="canvas"></canvas>
+      <div id="overlay" class="hidden">
+        <div id="overlay-card">
+          <h2 id="overlay-title"></h2>
+          <p id="overlay-text"></p>
+          <button id="overlay-btn">Opnieuw</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="dpad">
+      <button data-dir="up">▲</button>
+      <div class="dpad-row">
+        <button data-dir="left">◀</button>
+        <button data-dir="down">▼</button>
+        <button data-dir="right">▶</button>
+      </div>
+    </div>
+
+    <p id="hint">Beweeg met pijltjestoetsen / WASD. Vind de sleutel 🔑 en bereik de deur voordat de duivels je pakken.</p>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

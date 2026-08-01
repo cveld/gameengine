@@ -1,0 +1,49 @@
+<div class="container">
+<ng-container *ngIf="state$ | async as state">
+  <p>game1 id: {{game1Service?.guid}}</p>
+  <p>{{value}}</p>
+
+<!-- <p *ngFor="let message of game1Service?.messages">{{message}}</p> -->
+
+<!-- <div>state = {{state|json}}</div> -->
+
+
+<h1>Messages</h1>
+<ol><li *ngFor="let message of game1Service?.messages">
+  <span *ngIf="message.type === 'error'" style="color: red">{{message.message}}</span>
+  <span *ngIf="message.type === 'message'">{{message.message}}</span>
+</li></ol>
+
+<h1>Actions</h1>
+<div class="row">
+  <div class="md-12">
+    <button class="btn btn-primary mr-1" (click)="startGameClicked()">Start game</button>
+    <button class="btn btn-primary" (click)="stopGameClicked()">Stop game</button>
+  </div>
+</div>
+<h1>Joined players</h1>
+<ol><li *ngFor="let joinedplayer of state.joinedplayers">{{joinedplayer}}</li></ol>
+
+<h1>Game info</h1>
+<div>Game started = {{state.started}}</div>
+<div *ngIf="state.turn">Player's turn = {{state.joinedplayers[state.turn]}}</div>
+<div *ngIf="state.cardsToTake">Cards to take = {{state.cardsToTake}}</div>
+<div *ngIf="state.direction">Direction = {{state.direction}}</div>
+<div *ngIf="state.selectedSuit">Selected suit = {{state.selectedSuit}}</div>
+
+  <h1 *ngIf="state.players">Cards</h1>
+  <ng-container *ngFor="let player of state.players; index as i">
+  <h2>Player {{state.joinedplayers[i]}}</h2>
+  <app-card *ngFor="let card of player" [card]="card"></app-card>
+  </ng-container>
+  <ng-container *ngIf="state.playedcards">
+    <h2>Played (count = {{state.playedcards?.length}})</h2>
+    <app-card *ngFor="let card of state.playedcards; index as i" [card]="state.playedcards![state.playedcards!.length-1-i]"></app-card>
+  </ng-container>
+  <ng-container *ngIf="state.stack">
+    <h2>Stack (count = {{state.stack?.length}})</h2>
+    <app-card *ngFor="let card of state.stack" [card]="card"></app-card>
+  </ng-container>
+</ng-container>
+
+</div>
