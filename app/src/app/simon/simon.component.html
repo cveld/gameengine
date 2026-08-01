@@ -1,7 +1,11 @@
 <div class="container py-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Simon Says</h1>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 align-items-center">
+      <span *ngIf="joined" class="badge rounded-pill text-bg-success">
+        <i class="bi bi-circle-fill" style="font-size: 0.5rem;"></i>
+        {{ (presence$ | async)?.size ?? 0 }} {{ (presence$ | async)?.size === 1 ? 'speler' : 'spelers' }} online
+      </span>
       <button *ngIf="joined" class="btn btn-outline-secondary btn-sm" (click)="switchProfile()">
         <i class="bi bi-person-circle"></i> {{ name }} &middot; Wissel
       </button>
@@ -47,6 +51,16 @@
       </div>
 
       <div class="col-lg-4">
+        <h2 class="h5">Wie speelt er ({{ (presence$ | async)?.size ?? 0 }})</h2>
+        <ul class="list-group mb-4">
+          <li class="list-group-item" *ngFor="let entry of (presence$ | async) | keyvalue">
+            {{ entry.value.name }}
+          </li>
+          <li class="list-group-item text-muted" *ngIf="!(presence$ | async)?.size">
+            Niemand anders online.
+          </li>
+        </ul>
+
         <h2 class="h5">Geschiedenis</h2>
         <table class="table table-sm">
           <thead><tr><th>Naam</th><th>Score</th><th>Datum</th></tr></thead>

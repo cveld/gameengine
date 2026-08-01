@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ProfileService } from '../services/profile/profile.service';
 import { SimonService } from './simon.service';
 import { SimonColor } from './simon.models';
@@ -17,7 +17,7 @@ const TONE_FREQUENCIES: Record<SimonColor, number> = {
   templateUrl: './simon.component.html',
   styleUrls: ['./simon.component.scss']
 })
-export class SimonComponent implements OnInit {
+export class SimonComponent implements OnInit, OnDestroy {
 
   constructor(public simonService: SimonService, private profile: ProfileService) { }
 
@@ -31,6 +31,7 @@ export class SimonComponent implements OnInit {
   score = 0;
   message = 'Druk op start om te beginnen';
 
+  presence$ = this.simonService.presence$;
   results$ = this.simonService.results$;
 
   private sequence: SimonColor[] = [];
@@ -45,6 +46,10 @@ export class SimonComponent implements OnInit {
     }
   }
 
+  ngOnDestroy(): void {
+    this.simonService.leave();
+  }
+
   join() {
     if (!this.name.trim()) return;
     this.joinAs(this.name.trim());
@@ -54,10 +59,12 @@ export class SimonComponent implements OnInit {
     this.name = name;
     this.profile.setActiveProfile(name);
     this.recentProfiles = this.profile.getRecentProfiles();
+    this.simonService.join(name);
     this.joined = true;
   }
 
   switchProfile() {
+    this.simonService.leave();
     this.profile.clearActiveProfile();
     this.name = '';
     this.joined = false;

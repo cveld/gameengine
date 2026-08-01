@@ -6,3 +6,9 @@ export interface ISimonResult {
   score: number;
   completedAt: number;
 }
+
+export interface IPresenceEntry {
+  clientId: string;
+  name: string;
+  joinedAt: number;
+}
