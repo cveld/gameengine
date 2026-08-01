@@ -11,6 +11,7 @@ import { TabmanagerComponent } from "./tabmanager/tabmanager.component";
 import { DebugComponent } from "./debugtab/debug.component";
 import { HomeComponent } from "../home/home.component";
 import { MemoryComponent } from "../memory/memory.component";
+import { SimonComponent } from "../simon/simon.component";
 
 @NgModule({
   declarations: [
@@ -22,7 +23,8 @@ import { MemoryComponent } from "../memory/memory.component";
     CardComponent,
     DebugComponent,
     HomeComponent,
-    MemoryComponent
+    MemoryComponent,
+    SimonComponent
   ],
   imports: [
     AppRoutingModule,

@@ -1,0 +1,121 @@
+import { Component, OnInit } from '@angular/core';
+import { GameHistoryService } from '../services/history/game-history.service';
+import { ISimonResult, SimonColor } from './simon.models';
+
+const HISTORY_GAME_KEY = 'simon';
+const COLORS: SimonColor[] = ['green', 'red', 'yellow', 'blue'];
+const STEP_DELAY_MS = 600;
+
+@Component({
+  selector: 'app-simon',
+  templateUrl: './simon.component.html',
+  styleUrls: ['./simon.component.scss']
+})
+export class SimonComponent implements OnInit {
+
+  constructor(private history: GameHistoryService) { }
+
+  name = '';
+  joined = false;
+
+  playing = false;
+  showingSequence = false;
+  activeColor?: SimonColor;
+  score = 0;
+  message = 'Druk op start om te beginnen';
+
+  results: ISimonResult[] = [];
+
+  private sequence: SimonColor[] = [];
+  private playerStep = 0;
+
+  ngOnInit(): void {
+    this.results = this.loadResults();
+  }
+
+  join() {
+    if (!this.name.trim()) return;
+    this.joined = true;
+  }
+
+  start() {
+    this.sequence = [];
+    this.score = 0;
+    this.playerStep = 0;
+    this.playing = true;
+    this.nextRound();
+  }
+
+  async pick(color: SimonColor) {
+    if (!this.playing || this.showingSequence) return;
+
+    this.flash(color, 150);
+
+    if (color === this.sequence[this.playerStep]) {
+      this.playerStep++;
+      if (this.playerStep === this.sequence.length) {
+        this.score++;
+        setTimeout(() => this.nextRound(), STEP_DELAY_MS);
+      }
+      return;
+    }
+
+    this.endGame();
+  }
+
+  private async nextRound() {
+    this.sequence.push(COLORS[Math.floor(Math.random() * COLORS.length)]);
+    this.playerStep = 0;
+    await this.playSequence();
+  }
+
+  private async playSequence() {
+    this.showingSequence = true;
+    this.message = 'Kijk goed...';
+    for (const color of this.sequence) {
+      await this.sleep(STEP_DELAY_MS / 2);
+      await this.flash(color, STEP_DELAY_MS / 2);
+    }
+    this.showingSequence = false;
+    this.message = 'Jouw beurt';
+  }
+
+  private async flash(color: SimonColor, duration: number) {
+    this.activeColor = color;
+    await this.sleep(duration);
+    this.activeColor = undefined;
+  }
+
+  private endGame() {
+    this.playing = false;
+    this.message = `Game over! Score: ${this.score}`;
+    this.reportResult(this.score);
+  }
+
+  private reportResult(score: number) {
+    const result: ISimonResult = {
+      name: this.name || 'Onbekend',
+      score,
+      completedAt: Date.now(),
+    };
+    this.history.add<ISimonResult>({
+      game: HISTORY_GAME_KEY,
+      name: result.name,
+      summary: `Score ${result.score}`,
+      data: result,
+      completedAt: result.completedAt,
+    });
+    this.results = this.loadResults();
+  }
+
+  private loadResults(): ISimonResult[] {
+    return this.history.get<ISimonResult>(HISTORY_GAME_KEY)
+      .map(entry => entry.data)
+      .sort((a, b) => b.completedAt - a.completedAt)
+      .slice(0, 50);
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}

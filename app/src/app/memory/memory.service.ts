@@ -2,13 +2,16 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { Guid } from 'guid-typescript';
 import { BehaviorSubject } from 'rxjs';
 import { SignalrService } from '../services/signalr/SignalrService';
+import { GameHistoryService } from '../services/history/game-history.service';
 import { UserTypeEnum } from '../shared/signalrmodels';
 import { MemoryOps } from './memory-ops';
 import { IMemoryResult, IPresenceEntry } from './memory.models';
 
-// Same "no backend" pattern as the rest of the app: presence and results
-// aren't persisted anywhere, they only exist as long as clients stay
-// connected and are (re)populated purely through SignalR broadcasts.
+const HISTORY_GAME_KEY = 'memory';
+
+// Presence stays live-only (see below), but results are additionally kept in
+// localStorage via GameHistoryService so a player's own history survives a
+// page reload, instead of only existing as long as clients stay connected.
 @Injectable({
   providedIn: 'root'
 })
@@ -17,13 +20,15 @@ export class MemoryService implements OnDestroy {
   readonly clientId = Guid.create().toString();
 
   presence$ = new BehaviorSubject<Map<string, IPresenceEntry>>(new Map());
-  results$ = new BehaviorSubject<IMemoryResult[]>([]);
+  results$: BehaviorSubject<IMemoryResult[]>;
 
   name?: string;
   private joined = false;
   private joinedAt?: number;
 
-  constructor(private signalr: SignalrService) {
+  constructor(private signalr: SignalrService, private history: GameHistoryService) {
+    this.results$ = new BehaviorSubject<IMemoryResult[]>(this.loadStoredResults());
+
     this.signalr.addHandler<IPresenceEntry>(MemoryOps.presenceJoin, msg => this.onPresenceEntry(msg.payload));
     this.signalr.addHandler<IPresenceEntry>(MemoryOps.presenceResult, msg => this.onPresenceEntry(msg.payload));
     this.signalr.addHandler<{ clientId: string }>(MemoryOps.presenceLeave, msg => this.onPresenceLeave(msg.payload?.clientId));
@@ -88,6 +93,20 @@ export class MemoryService implements OnDestroy {
   private onResult(result?: IMemoryResult) {
     if (!result) return;
     this.results$.next([result, ...this.results$.value].slice(0, 50));
+    this.history.add<IMemoryResult>({
+      game: HISTORY_GAME_KEY,
+      name: result.name,
+      summary: `${result.moves} zetten in ${(result.durationMs / 1000).toFixed(1)}s`,
+      data: result,
+      completedAt: result.completedAt,
+    });
+  }
+
+  private loadStoredResults(): IMemoryResult[] {
+    return this.history.get<IMemoryResult>(HISTORY_GAME_KEY)
+      .map(entry => entry.data)
+      .sort((a, b) => b.completedAt - a.completedAt)
+      .slice(0, 50);
   }
 
   private send<T>(type: string, payload: T) {

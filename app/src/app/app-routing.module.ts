@@ -6,6 +6,7 @@ import { TabmanagerComponent } from './components/tabmanager/tabmanager.componen
 import { DebugComponent } from './components/debugtab/debug.component';
 import { HomeComponent } from './home/home.component';
 import { MemoryComponent } from './memory/memory.component';
+import { SimonComponent } from './simon/simon.component';
 const routes: Routes = [
   { path: '', component: HomeComponent },
   {
@@ -17,6 +18,7 @@ const routes: Routes = [
     ]
   },
   { path: 'memory', component: MemoryComponent },
+  { path: 'simon', component: SimonComponent },
   { path: '**', redirectTo: '' },
 ];
 
