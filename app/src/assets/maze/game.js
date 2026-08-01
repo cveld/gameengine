@@ -46,7 +46,7 @@
     "devil_down", "devil_left", "devil_up", "devil_right",
     "devil_down_walk", "devil_left_walk", "devil_up_walk", "devil_right_walk",
     "gem_blue", "gem_green", "gem_red", "gem_orange", "gem_white", "gem_pink",
-    "wall_block",
+    "wall_fill", "border_top", "border_bottom", "border_left", "border_right",
     "floor_plain", "floor_pebbles", "floor_rocks", "floor_grass",
     "floor_cracked1", "floor_cracked2", "floor_skull",
     "door", "key", "rock_small", "rock_big", "bone", "skull", "torch", "grass",
@@ -286,6 +286,31 @@
     ctx.drawImage(img, dx, dy, w, h);
   }
 
+  function drawEdge(name, cx, cy, side) {
+    const img = images[name];
+    if (!img || !img.complete || img.naturalWidth === 0) return;
+    if (side === "top" || side === "bottom") {
+      const thickness = TILE * (img.naturalHeight / img.naturalWidth);
+      const dy = side === "top" ? cy : cy + TILE - thickness;
+      ctx.drawImage(img, cx, dy, TILE, thickness);
+    } else {
+      const thickness = TILE * (img.naturalWidth / img.naturalHeight);
+      const dx = side === "left" ? cx : cx + TILE - thickness;
+      ctx.drawImage(img, dx, cy, thickness, TILE);
+    }
+  }
+
+  function drawWallCell(x, y, cx, cy) {
+    drawSprite("wall_fill", cx, cy, { fit: "cover" });
+    // draw a lit stone border only on edges that face an open path, so
+    // walls read as a connected rock face hugging the corridors instead
+    // of a repeating isolated block.
+    if (y > 0 && grid[y - 1][x] === FLOOR) drawEdge("border_top", cx, cy, "top");
+    if (y < ROWS - 1 && grid[y + 1][x] === FLOOR) drawEdge("border_bottom", cx, cy, "bottom");
+    if (x > 0 && grid[y][x - 1] === FLOOR) drawEdge("border_left", cx, cy, "left");
+    if (x < COLS - 1 && grid[y][x + 1] === FLOOR) drawEdge("border_right", cx, cy, "right");
+  }
+
   function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -296,7 +321,7 @@
         if (grid[y][x] === FLOOR) {
           drawSprite(floorVariant[y][x], cx, cy, { fit: "cover" });
         } else {
-          drawSprite("wall_block", cx, cy, { fit: "cover" });
+          drawWallCell(x, y, cx, cy);
         }
       }
     }
