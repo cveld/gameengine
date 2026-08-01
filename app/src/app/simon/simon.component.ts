@@ -140,7 +140,9 @@ export class SimonComponent implements OnInit {
     const gain = ctx.createGain();
     oscillator.type = 'sine';
     oscillator.frequency.value = TONE_FREQUENCIES[color];
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    const attackEnd = ctx.currentTime + 0.015;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.2, attackEnd);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + durationMs / 1000);
     oscillator.connect(gain).connect(ctx.destination);
     oscillator.start();
@@ -153,7 +155,8 @@ export class SimonComponent implements OnInit {
     const gain = ctx.createGain();
     oscillator.type = 'sawtooth';
     oscillator.frequency.value = 110;
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
     oscillator.connect(gain).connect(ctx.destination);
     oscillator.start();
