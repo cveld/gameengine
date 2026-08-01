@@ -83,7 +83,7 @@
             const img = new Image();
             img.onload = () => resolve();
             img.onerror = () => resolve();
-            img.src = `assets/sprites/${name}.png`;
+            img.src = `sprites/${name}.png`;
             images[name] = img;
           })
       )
