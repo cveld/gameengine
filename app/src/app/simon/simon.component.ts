@@ -6,6 +6,12 @@ import { ISimonResult, SimonColor } from './simon.models';
 const HISTORY_GAME_KEY = 'simon';
 const COLORS: SimonColor[] = ['green', 'red', 'yellow', 'blue'];
 const STEP_DELAY_MS = 600;
+const TONE_FREQUENCIES: Record<SimonColor, number> = {
+  green: 329.63,  // E4
+  red: 220.00,    // A3
+  yellow: 392.00, // G4
+  blue: 261.63,   // C4
+};
 
 @Component({
   selector: 'app-simon',
@@ -30,6 +36,7 @@ export class SimonComponent implements OnInit {
 
   private sequence: SimonColor[] = [];
   private playerStep = 0;
+  private audioCtx?: AudioContext;
 
   ngOnInit(): void {
     this.results = this.loadResults();
@@ -60,6 +67,7 @@ export class SimonComponent implements OnInit {
   }
 
   start() {
+    this.ensureAudioContext();
     this.sequence = [];
     this.score = 0;
     this.playerStep = 0;
@@ -103,6 +111,7 @@ export class SimonComponent implements OnInit {
 
   private async flash(color: SimonColor, duration: number) {
     this.activeColor = color;
+    this.playTone(color, duration);
     await this.sleep(duration);
     this.activeColor = undefined;
   }
@@ -110,7 +119,45 @@ export class SimonComponent implements OnInit {
   private endGame() {
     this.playing = false;
     this.message = `Game over! Score: ${this.score}`;
+    this.playFailureSound();
     this.reportResult(this.score);
+  }
+
+  private ensureAudioContext(): AudioContext {
+    if (!this.audioCtx) {
+      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+      this.audioCtx = new AudioContextCtor();
+    }
+    if (this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume();
+    }
+    return this.audioCtx;
+  }
+
+  private playTone(color: SimonColor, durationMs: number) {
+    const ctx = this.ensureAudioContext();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.value = TONE_FREQUENCIES[color];
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + durationMs / 1000);
+    oscillator.connect(gain).connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + durationMs / 1000);
+  }
+
+  private playFailureSound() {
+    const ctx = this.ensureAudioContext();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.value = 110;
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
+    oscillator.connect(gain).connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.4);
   }
 
   private reportResult(score: number) {
