@@ -1,0 +1,13 @@
+.maze-frame-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.maze-frame {
+  width: 100%;
+  max-width: 900px;
+  height: 80vh;
+  min-height: 600px;
+  border: none;
+  border-radius: 8px;
+}

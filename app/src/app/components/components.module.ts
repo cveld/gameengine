@@ -12,6 +12,7 @@ import { DebugComponent } from "./debugtab/debug.component";
 import { HomeComponent } from "../home/home.component";
 import { MemoryComponent } from "../memory/memory.component";
 import { SimonComponent } from "../simon/simon.component";
+import { MazeComponent } from "../maze/maze.component";
 
 @NgModule({
   declarations: [
@@ -24,7 +25,8 @@ import { SimonComponent } from "../simon/simon.component";
     DebugComponent,
     HomeComponent,
     MemoryComponent,
-    SimonComponent
+    SimonComponent,
+    MazeComponent
   ],
   imports: [
     AppRoutingModule,
