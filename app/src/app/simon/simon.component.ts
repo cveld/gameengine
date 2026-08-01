@@ -1,9 +1,8 @@
 import { Component, OnInit } from '@angular/core';
-import { GameHistoryService } from '../services/history/game-history.service';
 import { ProfileService } from '../services/profile/profile.service';
-import { ISimonResult, SimonColor } from './simon.models';
+import { SimonService } from './simon.service';
+import { SimonColor } from './simon.models';
 
-const HISTORY_GAME_KEY = 'simon';
 const COLORS: SimonColor[] = ['green', 'red', 'yellow', 'blue'];
 const STEP_DELAY_MS = 600;
 const TONE_FREQUENCIES: Record<SimonColor, number> = {
@@ -20,7 +19,7 @@ const TONE_FREQUENCIES: Record<SimonColor, number> = {
 })
 export class SimonComponent implements OnInit {
 
-  constructor(private history: GameHistoryService, private profile: ProfileService) { }
+  constructor(public simonService: SimonService, private profile: ProfileService) { }
 
   name = '';
   joined = false;
@@ -32,14 +31,13 @@ export class SimonComponent implements OnInit {
   score = 0;
   message = 'Druk op start om te beginnen';
 
-  results: ISimonResult[] = [];
+  results$ = this.simonService.results$;
 
   private sequence: SimonColor[] = [];
   private playerStep = 0;
   private audioCtx?: AudioContext;
 
   ngOnInit(): void {
-    this.results = this.loadResults();
     this.recentProfiles = this.profile.getRecentProfiles();
     const active = this.profile.getActiveProfile();
     if (active) {
@@ -120,7 +118,7 @@ export class SimonComponent implements OnInit {
     this.playing = false;
     this.message = `Game over! Score: ${this.score}`;
     this.playFailureSound();
-    this.reportResult(this.score);
+    this.simonService.reportResult(this.name || 'Onbekend', this.score);
   }
 
   private ensureAudioContext(): AudioContext {
@@ -161,29 +159,6 @@ export class SimonComponent implements OnInit {
     oscillator.connect(gain).connect(ctx.destination);
     oscillator.start();
     oscillator.stop(ctx.currentTime + 0.4);
-  }
-
-  private reportResult(score: number) {
-    const result: ISimonResult = {
-      name: this.name || 'Onbekend',
-      score,
-      completedAt: Date.now(),
-    };
-    this.history.add<ISimonResult>({
-      game: HISTORY_GAME_KEY,
-      name: result.name,
-      summary: `Score ${result.score}`,
-      data: result,
-      completedAt: result.completedAt,
-    });
-    this.results = this.loadResults();
-  }
-
-  private loadResults(): ISimonResult[] {
-    return this.history.get<ISimonResult>(HISTORY_GAME_KEY)
-      .map(entry => entry.data)
-      .sort((a, b) => b.completedAt - a.completedAt)
-      .slice(0, 50);
   }
 
   private sleep(ms: number): Promise<void> {

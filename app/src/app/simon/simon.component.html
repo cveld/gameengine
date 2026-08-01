@@ -51,12 +51,12 @@
         <table class="table table-sm">
           <thead><tr><th>Naam</th><th>Score</th><th>Datum</th></tr></thead>
           <tbody>
-            <tr *ngFor="let result of results">
+            <tr *ngFor="let result of results$ | async">
               <td>{{ result.name }}</td>
               <td>{{ result.score }}</td>
               <td>{{ result.completedAt | date:'short' }}</td>
             </tr>
-            <tr *ngIf="!results.length">
+            <tr *ngIf="!(results$ | async)?.length">
               <td colspan="3" class="text-muted">Nog geen spellen gespeeld.</td>
             </tr>
           </tbody>
