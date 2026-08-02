@@ -27,6 +27,14 @@ html, body {
   gap: 12px;
 }
 
+#game:fullscreen {
+  max-width: 100%;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  background: var(--bg);
+}
+
 #hud {
   width: 100%;
   display: flex;
@@ -55,6 +63,11 @@ html, body {
 
 .stat { white-space: nowrap; }
 
+.hud-buttons {
+  display: flex;
+  gap: 8px;
+}
+
 #btn-new, #overlay-btn {
   background: var(--accent);
   color: #1a1508;
@@ -66,6 +79,19 @@ html, body {
 }
 
 #btn-new:hover, #overlay-btn:hover { filter: brightness(1.1); }
+
+#btn-fullscreen {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #3a4260;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#btn-fullscreen:hover { filter: brightness(1.2); }
 
 #stage {
   position: relative;

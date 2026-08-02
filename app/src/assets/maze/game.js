@@ -597,6 +597,33 @@
     document.getElementById("overlay").classList.add("hidden");
   }
 
+  // ---------- fullscreen ----------
+  function setupFullscreen() {
+    const btn = document.getElementById("btn-fullscreen");
+    const el = document.getElementById("game");
+    const request = el.requestFullscreen || el.webkitRequestFullscreen;
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!request || !exit) {
+      btn.classList.add("hidden");
+      return;
+    }
+    const isFullscreen = () => Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+    const updateLabel = () => {
+      btn.title = isFullscreen() ? "Verlaat fullscreen" : "Fullscreen";
+    };
+    btn.addEventListener("click", () => {
+      if (isFullscreen()) {
+        exit.call(document);
+      } else {
+        const result = request.call(el);
+        if (result && typeof result.catch === "function") result.catch(() => {});
+      }
+    });
+    document.addEventListener("fullscreenchange", updateLabel);
+    document.addEventListener("webkitfullscreenchange", updateLabel);
+    updateLabel();
+  }
+
   // ---------- input ----------
   const KEY_DIR = {
     ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
@@ -673,6 +700,7 @@
     ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
     setupInput();
+    setupFullscreen();
     await loadImages(SPRITE_NAMES);
     newLevel(0);
     requestAnimationFrame(loop);
