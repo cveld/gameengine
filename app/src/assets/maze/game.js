@@ -631,6 +631,7 @@
     W: "up", S: "down", A: "left", D: "right",
   };
   let queuedDir = null;
+  let touchDir = null;
 
   function handleDir(dir) {
     if (gameOver || won) return;
@@ -645,11 +646,6 @@
         handleDir(dir);
       }
     });
-    for (const btn of document.querySelectorAll("#dpad button")) {
-      const dir = btn.dataset.dir;
-      btn.addEventListener("touchstart", (e) => { e.preventDefault(); handleDir(dir); }, { passive: false });
-      btn.addEventListener("mousedown", () => handleDir(dir));
-    }
     document.getElementById("btn-new").addEventListener("click", () => {
       level = 1;
       score = 0;
@@ -667,6 +663,68 @@
         newLevel(0);
       }
     });
+    document.getElementById("btn-help").addEventListener("click", () => {
+      document.getElementById("help-overlay").classList.remove("hidden");
+    });
+    document.getElementById("help-close").addEventListener("click", () => {
+      document.getElementById("help-overlay").classList.add("hidden");
+    });
+  }
+
+  // touch/mouse-drag joystick: touch anywhere on the stage and drag toward
+  // an edge to move that direction, for as long as the drag stays deflected.
+  function setupJoystick() {
+    const stage = document.getElementById("stage");
+    const joystick = document.getElementById("joystick");
+    const knob = document.getElementById("joystick-knob");
+    const overlay = document.getElementById("overlay");
+    const helpOverlay = document.getElementById("help-overlay");
+    const MAX_RADIUS = 40;
+    const DEAD_ZONE = 12;
+
+    let activePointerId = null;
+    let originX = 0, originY = 0;
+
+    function dirFromDelta(dx, dy) {
+      if (Math.hypot(dx, dy) < DEAD_ZONE) return null;
+      return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+    }
+
+    stage.addEventListener("pointerdown", (e) => {
+      if (activePointerId !== null) return;
+      if (gameOver || won) return;
+      if (!overlay.classList.contains("hidden") || !helpOverlay.classList.contains("hidden")) return;
+      if (e.target.closest("#hud")) return;
+      activePointerId = e.pointerId;
+      const rect = stage.getBoundingClientRect();
+      originX = e.clientX - rect.left;
+      originY = e.clientY - rect.top;
+      joystick.style.left = `${originX}px`;
+      joystick.style.top = `${originY}px`;
+      knob.style.transform = "translate(0, 0)";
+      joystick.classList.remove("hidden");
+      stage.setPointerCapture(e.pointerId);
+    });
+
+    stage.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== activePointerId) return;
+      const rect = stage.getBoundingClientRect();
+      const dx = e.clientX - rect.left - originX;
+      const dy = e.clientY - rect.top - originY;
+      const dist = Math.min(MAX_RADIUS, Math.hypot(dx, dy));
+      const angle = Math.atan2(dy, dx);
+      knob.style.transform = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`;
+      touchDir = dirFromDelta(dx, dy);
+    });
+
+    function release(e) {
+      if (e.pointerId !== activePointerId) return;
+      activePointerId = null;
+      touchDir = null;
+      joystick.classList.add("hidden");
+    }
+    stage.addEventListener("pointerup", release);
+    stage.addEventListener("pointercancel", release);
   }
 
   // ---------- main loop ----------
@@ -675,6 +733,9 @@
       if (queuedDir && !player.moving) {
         tryMove(player, queuedDir);
         queuedDir = null;
+      }
+      if (touchDir && !player.moving) {
+        tryMove(player, touchDir);
       }
       updateMovement(player, PLAYER_MOVE_MS, now);
       for (const e of enemies) updateMovement(e, ENEMY_MOVE_MS * 0.9, now);
@@ -701,6 +762,7 @@
     ctx.imageSmoothingEnabled = false;
     setupInput();
     setupFullscreen();
+    setupJoystick();
     await loadImages(SPRITE_NAMES);
     newLevel(0);
     requestAnimationFrame(loop);

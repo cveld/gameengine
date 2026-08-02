@@ -8,42 +8,46 @@
 </head>
 <body>
   <div id="game">
-    <header id="hud">
-      <h1>Dungeon Maze</h1>
-      <div class="stats">
-        <span class="stat" id="stat-score">⭐ 0</span>
-        <span class="stat" id="stat-key">🔑 <span id="key-state">?</span></span>
-        <span class="stat" id="stat-lives">❤️ <span id="lives-state">3</span></span>
-        <span class="stat" id="stat-level">🏰 1</span>
-        <span class="stat hidden" id="stat-freeze">🔥 <span id="freeze-state"></span>s</span>
-      </div>
-      <div class="hud-buttons">
-        <button id="btn-fullscreen" title="Fullscreen">⛶</button>
-        <button id="btn-new">Nieuwe Maze</button>
-      </div>
-    </header>
-
     <div id="stage">
       <canvas id="canvas"></canvas>
-      <div id="overlay" class="hidden">
-        <div id="overlay-card">
+
+      <header id="hud">
+        <h1>Dungeon Maze</h1>
+        <div class="stats">
+          <span class="stat" id="stat-score">⭐ 0</span>
+          <span class="stat" id="stat-key">🔑 <span id="key-state">?</span></span>
+          <span class="stat" id="stat-lives">❤️ <span id="lives-state">3</span></span>
+          <span class="stat" id="stat-level">🏰 1</span>
+          <span class="stat hidden" id="stat-freeze">🔥 <span id="freeze-state"></span>s</span>
+        </div>
+        <div class="hud-buttons">
+          <button id="btn-help" title="Uitleg">?</button>
+          <button id="btn-fullscreen" title="Fullscreen">⛶</button>
+          <button id="btn-new">Nieuwe Maze</button>
+        </div>
+      </header>
+
+      <div id="joystick" class="hidden">
+        <div id="joystick-knob"></div>
+      </div>
+
+      <div id="overlay" class="modal hidden">
+        <div class="modal-card">
           <h2 id="overlay-title"></h2>
           <p id="overlay-text"></p>
           <button id="overlay-btn">Opnieuw</button>
         </div>
       </div>
-    </div>
 
-    <div id="dpad">
-      <button data-dir="up">▲</button>
-      <div class="dpad-row">
-        <button data-dir="left">◀</button>
-        <button data-dir="down">▼</button>
-        <button data-dir="right">▶</button>
+      <div id="help-overlay" class="modal hidden">
+        <div class="modal-card">
+          <h2>Hoe speel je</h2>
+          <p>Raak het scherm ergens aan en sleep naar links/rechts/boven/onder om te bewegen (of gebruik pijltjestoetsen / WASD).</p>
+          <p>Vind de sleutel 🔑 en bereik de deur voordat de duivels je pakken. Pak een fakkel 🔥 om de duivels tijdelijk uit te schakelen.</p>
+          <button id="help-close">Sluiten</button>
+        </div>
       </div>
     </div>
-
-    <p id="hint">Beweeg met pijltjestoetsen / WASD. Vind de sleutel 🔑 en bereik de deur voordat de duivels je pakken. Pak een fakkel 🔥 om de duivels tijdelijk uit te schakelen.</p>
   </div>
 
   <script src="game.js"></script>
