@@ -40,13 +40,20 @@
 
   const DECOR_PROPS = ["torch", "skull", "bone", "rock_small", "rock_big", "grass"];
 
+  // the source sheet's "walk" row turned out to be 4 frames of a single
+  // rightward run cycle rather than 4 per-direction poses; mirror them for
+  // left, and fall back to the static pose for up/down (no run art exists).
+  const HERO_RUN_FRAMES = ["hero_run0", "hero_run1", "hero_run2", "hero_run3"];
+  const HERO_RUN_FRAME_MS = 110;
+
   const SPRITE_NAMES = [
     "hero_down", "hero_left", "hero_up", "hero_right",
-    "hero_down_walk", "hero_left_walk", "hero_up_walk", "hero_right_walk",
+    "hero_run0", "hero_run1", "hero_run2", "hero_run3",
     "devil_down", "devil_left", "devil_up", "devil_right",
     "devil_down_walk", "devil_left_walk", "devil_up_walk", "devil_right_walk",
     "gem_blue", "gem_green", "gem_red", "gem_orange", "gem_white", "gem_pink",
     "wall_fill", "border_top", "border_bottom", "border_left", "border_right",
+    "wall_fill_light", "border_top_light", "border_bottom_light", "border_left_light", "border_right_light",
     "floor_plain", "floor_pebbles", "floor_rocks", "floor_grass",
     "floor_cracked1", "floor_cracked2", "floor_skull",
     "door", "key", "rock_small", "rock_big", "bone", "skull", "torch", "grass",
@@ -126,6 +133,41 @@
     return grid;
   }
 
+  // Wall cells in this maze are almost always one giant connected mass (the
+  // outer border plus most internal walls touch each other), so a plain
+  // flood fill would just recolor the entire maze a single color. Instead,
+  // grow same-color patches with a random size cap: each patch is still a
+  // single contiguous run (never flips color partway through, per the "a
+  // segment can only be 1 color" requirement), but a large wall mass gets
+  // carved into several independently-colored patches for real variety.
+  function computeWallVariants(grid) {
+    const variant = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    for (let sy = 0; sy < ROWS; sy++) {
+      for (let sx = 0; sx < COLS; sx++) {
+        if (grid[sy][sx] !== WALL || variant[sy][sx]) continue;
+        const color = Math.random() < 0.5 ? "dark" : "light";
+        const cap = 8 + Math.floor(Math.random() * 14); // ~8-21 cells per patch
+        const queue = [[sx, sy]];
+        variant[sy][sx] = color;
+        let claimed = 1;
+        let head = 0;
+        while (head < queue.length && claimed < cap) {
+          const [cx, cy] = queue[head++];
+          for (const d of Object.values(DIRS)) {
+            const nx = cx + d.dx, ny = cy + d.dy;
+            if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue;
+            if (grid[ny][nx] !== WALL || variant[ny][nx]) continue;
+            variant[ny][nx] = color;
+            queue.push([nx, ny]);
+            claimed++;
+            if (claimed >= cap) break;
+          }
+        }
+      }
+    }
+    return variant;
+  }
+
   function bfs(grid, sx, sy) {
     const dist = Array.from({ length: ROWS }, () => Array(COLS).fill(-1));
     dist[sy][sx] = 0;
@@ -148,7 +190,7 @@
 
   // ---------- game state ----------
   let canvas, ctx;
-  let grid, floorVariant, decor;
+  let grid, floorVariant, decor, wallVariant;
   let start, door, keyItem, gems, enemies;
   let player;
   let score = 0, lives = 3, level = 1;
@@ -185,6 +227,7 @@
 
   function newLevel(carryScore) {
     grid = generateMaze();
+    wallVariant = computeWallVariants(grid);
     usedCells = new Set();
     start = { x: 1, y: 1 };
     claim(start.x, start.y);
@@ -301,14 +344,17 @@
   }
 
   function drawWallCell(x, y, cx, cy) {
-    drawSprite("wall_fill", cx, cy, { fit: "cover" });
+    // each connected run of wall cells commits to one palette (see
+    // computeWallVariants) so a segment never flips color partway through.
+    const suffix = wallVariant[y][x] === "light" ? "_light" : "";
+    drawSprite("wall_fill" + suffix, cx, cy, { fit: "cover" });
     // draw a lit stone border only on edges that face an open path, so
     // walls read as a connected rock face hugging the corridors instead
     // of a repeating isolated block.
-    if (y > 0 && grid[y - 1][x] === FLOOR) drawEdge("border_top", cx, cy, "top");
-    if (y < ROWS - 1 && grid[y + 1][x] === FLOOR) drawEdge("border_bottom", cx, cy, "bottom");
-    if (x > 0 && grid[y][x - 1] === FLOOR) drawEdge("border_left", cx, cy, "left");
-    if (x < COLS - 1 && grid[y][x + 1] === FLOOR) drawEdge("border_right", cx, cy, "right");
+    if (y > 0 && grid[y - 1][x] === FLOOR) drawEdge("border_top" + suffix, cx, cy, "top");
+    if (y < ROWS - 1 && grid[y + 1][x] === FLOOR) drawEdge("border_bottom" + suffix, cx, cy, "bottom");
+    if (x > 0 && grid[y][x - 1] === FLOOR) drawEdge("border_left" + suffix, cx, cy, "left");
+    if (x < COLS - 1 && grid[y][x + 1] === FLOOR) drawEdge("border_right" + suffix, cx, cy, "right");
   }
 
   function render() {
@@ -351,23 +397,42 @@
     ].sort((a, b) => a.py - b.py);
 
     for (const e of entities) {
-      const walkFrame = e.moving && Math.floor(performance.now() / 150) % 2 === 0 ? "_walk" : "";
       const blink = e.kind === "hero" && player.invulnUntil > performance.now() && Math.floor(performance.now() / 100) % 2 === 0;
       if (blink) continue;
-      const sprite = `${e.kind === "hero" ? "hero" : "devil"}_${e.facing}${walkFrame}`;
-      drawSpritePixel(sprite, e.px, e.py);
+      if (e.kind === "hero") {
+        drawHero(e);
+      } else {
+        const walkFrame = e.moving && Math.floor(performance.now() / 150) % 2 === 0 ? "_walk" : "";
+        drawSpritePixel(`devil_${e.facing}${walkFrame}`, e.px, e.py);
+      }
     }
   }
 
-  function drawSpritePixel(name, px, py) {
+  function drawHero(e) {
+    if (e.moving && (e.facing === "left" || e.facing === "right")) {
+      const frame = HERO_RUN_FRAMES[Math.floor(performance.now() / HERO_RUN_FRAME_MS) % HERO_RUN_FRAMES.length];
+      drawSpritePixel(frame, e.px, e.py, e.facing === "left");
+    } else {
+      drawSpritePixel(`hero_${e.facing}`, e.px, e.py);
+    }
+  }
+
+  function drawSpritePixel(name, px, py, mirror = false) {
     const img = images[name];
     if (!img || !img.complete || img.naturalWidth === 0) return;
     const w = TILE;
     const ratio = img.naturalHeight / img.naturalWidth;
     const h = w * ratio;
-    const dx = px;
     const dy = py + TILE - h;
-    ctx.drawImage(img, dx, dy, w, h);
+    if (mirror) {
+      ctx.save();
+      ctx.translate(px + w, dy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, w, h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, px, dy, w, h);
+    }
   }
 
   // ---------- movement ----------
