@@ -38,7 +38,12 @@
     { name: "floor_skull", weight: 1 },
   ];
 
-  const DECOR_PROPS = ["torch", "skull", "bone", "rock_small", "rock_big", "grass"];
+  const DECOR_PROPS = ["skull", "bone", "rock_small", "rock_big", "grass"];
+
+  // picking up a torch scares off every devil for a while: they stop
+  // moving and can't hurt the player. Reserved exclusively for this pickup
+  // so a lit torch on the floor always means "grab me", never decoration.
+  const FREEZE_DURATION_MS = 8000;
 
   // the source sheet's "walk" row turned out to be 4 frames of a single
   // rightward run cycle rather than 4 per-direction poses; mirror them for
@@ -191,11 +196,12 @@
   // ---------- game state ----------
   let canvas, ctx;
   let grid, floorVariant, decor, wallVariant;
-  let start, door, keyItem, gems, enemies;
+  let start, door, keyItem, gems, enemies, torchPowerup;
   let player;
   let score = 0, lives = 3, level = 1;
   let gameOver = false, won = false;
   let lastEnemyTick = 0;
+  let freezeUntil = 0;
   let usedCells;
 
   function farthestCell(dist) {
@@ -275,6 +281,16 @@
       gems.push({ x: c.x, y: c.y, type: type.name, value: type.value, collected: false });
       claim(c.x, c.y);
     }
+
+    // torch power-up: temporarily scares off the devils
+    torchPowerup = null;
+    const torchCandidates = floorCells(dist, Math.floor(far.d * 0.15)).filter((c) => isFree(c.x, c.y));
+    if (torchCandidates.length) {
+      const c = torchCandidates[Math.floor(Math.random() * torchCandidates.length)];
+      torchPowerup = { x: c.x, y: c.y, collected: false };
+      claim(c.x, c.y);
+    }
+    freezeUntil = 0;
 
     // enemies: spawn reasonably far from player
     enemies = [];
@@ -390,12 +406,18 @@
       if (!g.collected) drawSprite(g.type, g.x * TILE, g.y * TILE, { scale: 0.65 });
     }
 
+    // torch power-up
+    if (torchPowerup && !torchPowerup.collected) {
+      drawSprite("torch", torchPowerup.x * TILE, torchPowerup.y * TILE, { scale: 0.75 });
+    }
+
     // entities sorted by row for pseudo depth
     const entities = [
       ...enemies.map((e) => ({ ...e, kind: "devil" })),
       { ...player, kind: "hero" },
     ].sort((a, b) => a.py - b.py);
 
+    const frozen = performance.now() < freezeUntil;
     for (const e of entities) {
       const blink = e.kind === "hero" && player.invulnUntil > performance.now() && Math.floor(performance.now() / 100) % 2 === 0;
       if (blink) continue;
@@ -403,7 +425,9 @@
         drawHero(e);
       } else {
         const walkFrame = e.moving && Math.floor(performance.now() / 150) % 2 === 0 ? "_walk" : "";
+        if (frozen) ctx.globalAlpha = 0.35;
         drawSpritePixel(`devil_${e.facing}${walkFrame}`, e.px, e.py);
+        if (frozen) ctx.globalAlpha = 1;
       }
     }
   }
@@ -506,13 +530,19 @@
         updateHud();
       }
     }
+    if (torchPowerup && !torchPowerup.collected && player.x === torchPowerup.x && player.y === torchPowerup.y) {
+      torchPowerup.collected = true;
+      freezeUntil = performance.now() + FREEZE_DURATION_MS;
+      updateHud();
+    }
     if (player.x === door.x && player.y === door.y) {
       if (player.hasKey) {
         won = true;
         showOverlay("Level voltooid!", `Je hebt de deur bereikt met ${score} punten.`, "Volgende level");
       }
     }
-    if (player.invulnUntil <= performance.now()) {
+    const now = performance.now();
+    if (player.invulnUntil <= now && now >= freezeUntil) {
       for (const e of enemies) {
         if (e.x === player.x && e.y === player.y) {
           hitPlayer();
@@ -544,6 +574,17 @@
     document.getElementById("key-state").textContent = player && player.hasKey ? "✔" : "?";
     document.getElementById("lives-state").textContent = String(Math.max(0, lives));
     document.getElementById("stat-level").textContent = `🏰 ${level}`;
+  }
+
+  function updateFreezeHud(now) {
+    const el = document.getElementById("stat-freeze");
+    const remaining = freezeUntil - now;
+    if (remaining <= 0) {
+      el.classList.add("hidden");
+      return;
+    }
+    el.classList.remove("hidden");
+    document.getElementById("freeze-state").textContent = Math.ceil(remaining / 1000);
   }
 
   function showOverlay(title, text, btnLabel) {
@@ -613,12 +654,15 @@
 
       if (now - lastEnemyTick > ENEMY_MOVE_MS) {
         lastEnemyTick = now;
-        for (const e of enemies) {
-          if (!e.moving) enemyStep(e);
+        if (now >= freezeUntil) {
+          for (const e of enemies) {
+            if (!e.moving) enemyStep(e);
+          }
         }
       }
       checkCollisions();
     }
+    updateFreezeHud(now);
     render();
     requestAnimationFrame(loop);
   }
