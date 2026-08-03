@@ -57,26 +57,30 @@ html, body {
 /* ---------- HUD (overlaid on the canvas, not in normal flow) ---------- */
 
 #hud {
+  --row: 40px; /* kept in sync with the maze's actual on-screen top row by JS */
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
+  width: 0; /* left/width overridden inline to track the canvas's letterboxed rect */
+  height: var(--row);
   z-index: 20;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  background: rgba(11, 15, 26, 0.72);
+  gap: calc(var(--row) * 0.2);
+  background: rgba(11, 15, 26, 0.78);
   backdrop-filter: blur(2px);
-  padding: 8px 12px;
+  padding: 0 calc(var(--row) * 0.22);
+  font-size: calc(var(--row) * 0.34);
+  overflow: hidden;
+  white-space: nowrap;
   pointer-events: none; /* let drags pass through the empty gaps between controls */
 }
 
 #hud > * { pointer-events: auto; }
 
 #hud h1 {
-  font-size: 1rem;
+  font-size: 1em;
   margin: 0;
   color: var(--accent);
   letter-spacing: 0.5px;
@@ -84,15 +88,15 @@ html, body {
 
 .stats {
   display: flex;
-  gap: 12px;
-  font-size: 0.9rem;
+  gap: 0.8em;
+  font-size: 0.88em;
 }
 
 .stat { white-space: nowrap; }
 
 .hud-buttons {
   display: flex;
-  gap: 8px;
+  gap: 0.35em;
 }
 
 #btn-new, .modal-card button {
@@ -100,9 +104,19 @@ html, body {
   color: #1a1508;
   border: none;
   border-radius: 6px;
-  padding: 7px 12px;
   font-weight: 600;
   cursor: pointer;
+}
+
+#btn-new {
+  border-radius: 0.3em;
+  padding: 0.3em 0.55em;
+  font-size: 0.8em;
+}
+
+.modal-card button {
+  padding: 8px 14px;
+  font-size: 1rem;
 }
 
 #btn-new:hover, .modal-card button:hover { filter: brightness(1.1); }
@@ -111,14 +125,18 @@ html, body {
   background: var(--panel);
   color: var(--text);
   border: 1px solid #3a4260;
-  border-radius: 6px;
-  padding: 7px 11px;
-  font-size: 1rem;
+  border-radius: 0.3em;
+  padding: 0.25em 0.5em;
+  font-size: 0.85em;
   line-height: 1;
   cursor: pointer;
 }
 
 #btn-fullscreen:hover, #btn-help:hover { filter: brightness(1.2); }
+
+@media (max-width: 480px) {
+  #hud h1 { display: none; }
+}
 
 /* ---------- shared modal (game-state overlay + help panel) ---------- */
 

@@ -624,6 +624,55 @@
     updateLabel();
   }
 
+  // Keep the HUD bar tied to the maze's actual on-screen top row, so it
+  // sits inside that row instead of overlapping into the row below where
+  // gameplay happens. When the maze is letterboxed top/bottom (tall/narrow
+  // screens) there's dead space above the canvas content anyway — use that
+  // for the HUD instead of squeezing it into a sliver too small to read.
+  const HUD_MIN_PX = 30;
+  const HUD_MAX_PX = 52;
+  function setupHudSizing() {
+    const hud = document.getElementById("hud");
+    const stage = document.getElementById("stage");
+    const sync = () => {
+      // canvas.getBoundingClientRect() is the element's full CSS box, not the
+      // letterboxed content rect that object-fit: contain actually paints
+      // into — work out the real visible maze rect ourselves so the HUD
+      // lines up with it in both letterboxing directions.
+      const box = canvas.getBoundingClientRect();
+      const stageRect = stage.getBoundingClientRect();
+      if (box.height <= 0 || box.width <= 0) return;
+      const contentAspect = canvas.width / canvas.height;
+      const boxAspect = box.width / box.height;
+      let contentW, contentH;
+      if (boxAspect > contentAspect) {
+        contentH = box.height;
+        contentW = contentH * contentAspect;
+      } else {
+        contentW = box.width;
+        contentH = contentW / contentAspect;
+      }
+      const contentLeft = box.left + (box.width - contentW) / 2;
+      const contentTop = box.top + (box.height - contentH) / 2;
+      const topGap = contentTop - box.top; // dead letterbox space above the maze, if any
+
+      hud.style.left = `${contentLeft - stageRect.left}px`;
+      hud.style.width = `${contentW}px`;
+      if (topGap >= HUD_MIN_PX) {
+        // plenty of unused space above the maze: park the HUD there instead
+        // of shrinking it to fit inside the (possibly tiny) top row.
+        const rowPx = Math.min(topGap, HUD_MAX_PX);
+        hud.style.top = `${contentTop - stageRect.top - rowPx}px`;
+        hud.style.setProperty("--row", `${rowPx}px`);
+      } else {
+        hud.style.top = `${contentTop - stageRect.top}px`;
+        hud.style.setProperty("--row", `${contentH / ROWS}px`);
+      }
+    };
+    new ResizeObserver(sync).observe(canvas);
+    sync();
+  }
+
   // ---------- input ----------
   const KEY_DIR = {
     ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
@@ -765,6 +814,7 @@
     setupJoystick();
     await loadImages(SPRITE_NAMES);
     newLevel(0);
+    setupHudSizing(); // after newLevel() so canvas.width/height reflect the real maze size
     requestAnimationFrame(loop);
   }
 
