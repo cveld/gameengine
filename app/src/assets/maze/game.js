@@ -624,21 +624,23 @@
     updateLabel();
   }
 
-  // Keep the HUD bar tied to the maze's actual on-screen top row, so it
-  // sits inside that row instead of overlapping into the row below where
-  // gameplay happens. When the maze is letterboxed top/bottom (tall/narrow
-  // screens) there's dead space above the canvas content anyway — use that
-  // for the HUD instead of squeezing it into a sliver too small to read.
+  // Keep the HUD bar tied to the maze's actual on-screen top row (portrait)
+  // or left column (landscape), so it sits inside that row/column instead
+  // of overlapping into the gameplay area next to it. When the maze is
+  // letterboxed on that axis (dead space above it, or to its left) park the
+  // HUD there instead of squeezing into a strip that might be tiny.
   const HUD_MIN_PX = 30;
   const HUD_MAX_PX = 52;
   function setupHudSizing() {
     const hud = document.getElementById("hud");
     const stage = document.getElementById("stage");
+    const btnNew = document.getElementById("btn-new");
+    const landscapeMQ = window.matchMedia("(orientation: landscape)");
     const sync = () => {
       // canvas.getBoundingClientRect() is the element's full CSS box, not the
       // letterboxed content rect that object-fit: contain actually paints
       // into — work out the real visible maze rect ourselves so the HUD
-      // lines up with it in both letterboxing directions.
+      // lines up with it regardless of which way it's letterboxed.
       const box = canvas.getBoundingClientRect();
       const stageRect = stage.getBoundingClientRect();
       if (box.height <= 0 || box.width <= 0) return;
@@ -654,22 +656,42 @@
       }
       const contentLeft = box.left + (box.width - contentW) / 2;
       const contentTop = box.top + (box.height - contentH) / 2;
-      const topGap = contentTop - box.top; // dead letterbox space above the maze, if any
+      const isVertical = landscapeMQ.matches;
 
-      hud.style.left = `${contentLeft - stageRect.left}px`;
-      hud.style.width = `${contentW}px`;
-      if (topGap >= HUD_MIN_PX) {
-        // plenty of unused space above the maze: park the HUD there instead
-        // of shrinking it to fit inside the (possibly tiny) top row.
-        const rowPx = Math.min(topGap, HUD_MAX_PX);
-        hud.style.top = `${contentTop - stageRect.top - rowPx}px`;
-        hud.style.setProperty("--row", `${rowPx}px`);
-      } else {
+      hud.classList.toggle("hud-vertical", isVertical);
+      btnNew.textContent = isVertical ? "+" : "Nieuwe Maze";
+      btnNew.title = isVertical ? "Nieuwe Maze" : "";
+
+      if (isVertical) {
+        const leftGap = contentLeft - box.left; // dead letterbox space left of the maze, if any
+        hud.style.width = ""; // let .hud-vertical's width: var(--row) apply
         hud.style.top = `${contentTop - stageRect.top}px`;
-        hud.style.setProperty("--row", `${contentH / ROWS}px`);
+        hud.style.height = `${contentH}px`;
+        if (leftGap >= HUD_MIN_PX) {
+          const colPx = Math.min(leftGap, HUD_MAX_PX);
+          hud.style.left = `${contentLeft - stageRect.left - colPx}px`;
+          hud.style.setProperty("--row", `${colPx}px`);
+        } else {
+          hud.style.left = `${contentLeft - stageRect.left}px`;
+          hud.style.setProperty("--row", `${contentW / COLS}px`);
+        }
+      } else {
+        const topGap = contentTop - box.top; // dead letterbox space above the maze, if any
+        hud.style.height = ""; // let #hud's height: var(--row) apply
+        hud.style.left = `${contentLeft - stageRect.left}px`;
+        hud.style.width = `${contentW}px`;
+        if (topGap >= HUD_MIN_PX) {
+          const rowPx = Math.min(topGap, HUD_MAX_PX);
+          hud.style.top = `${contentTop - stageRect.top - rowPx}px`;
+          hud.style.setProperty("--row", `${rowPx}px`);
+        } else {
+          hud.style.top = `${contentTop - stageRect.top}px`;
+          hud.style.setProperty("--row", `${contentH / ROWS}px`);
+        }
       }
     };
     new ResizeObserver(sync).observe(canvas);
+    landscapeMQ.addEventListener("change", sync);
     sync();
   }
 

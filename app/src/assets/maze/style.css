@@ -79,6 +79,20 @@ html, body {
 
 #hud > * { pointer-events: auto; }
 
+/* landscape: run down the left edge instead of across the top */
+#hud.hud-vertical {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  width: var(--row);
+  height: 0; /* top/height overridden inline to track the maze's left column */
+  padding: calc(var(--row) * 0.22) 0;
+  gap: calc(var(--row) * 0.22);
+}
+
+#hud.hud-vertical .stats { flex-direction: column; gap: 0.55em; }
+#hud.hud-vertical .hud-buttons { flex-direction: column; gap: 0.35em; }
+
 #hud h1 {
   font-size: 1em;
   margin: 0;
@@ -137,6 +151,8 @@ html, body {
 @media (max-width: 480px) {
   #hud h1 { display: none; }
 }
+
+#hud.hud-vertical h1 { display: none; }
 
 /* ---------- shared modal (game-state overlay + help panel) ---------- */
 
