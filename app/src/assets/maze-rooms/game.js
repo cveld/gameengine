@@ -641,7 +641,9 @@
     document.getElementById("key-state").textContent = player && player.hasKey ? "✔" : "?";
     document.getElementById("lives-state").textContent = String(Math.max(0, lives));
     document.getElementById("stat-level").textContent = `🏰 ${level}`;
-    document.getElementById("stat-room").textContent = `📍 ${curRx + 1}/${RG_COLS}, ${curRy + 1}/${RG_ROWS}`;
+    const roomStat = document.getElementById("stat-room");
+    roomStat.textContent = `📍 kamer ${curRx + 1},${curRy + 1}`;
+    roomStat.title = `Kamer ${curRx + 1},${curRy + 1} in een raster van ${RG_COLS}×${RG_ROWS} kamers`;
   }
 
   function showOverlay(title, text, btnLabel) {
