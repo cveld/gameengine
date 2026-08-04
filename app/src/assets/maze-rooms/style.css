@@ -135,7 +135,7 @@ html, body {
 
 #btn-new:hover, .modal-card button:hover { filter: brightness(1.1); }
 
-#btn-fullscreen, #btn-help {
+#btn-fullscreen, #btn-help, #btn-mute {
   background: var(--panel);
   color: var(--text);
   border: 1px solid #3a4260;
@@ -146,7 +146,7 @@ html, body {
   cursor: pointer;
 }
 
-#btn-fullscreen:hover, #btn-help:hover { filter: brightness(1.2); }
+#btn-fullscreen:hover, #btn-help:hover, #btn-mute:hover { filter: brightness(1.2); }
 
 @media (max-width: 480px) {
   #hud h1 { display: none; }

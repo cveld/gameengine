@@ -127,6 +127,88 @@
     );
   }
 
+  // ---------- sound effects (synthesized, no audio files needed) ----------
+  let audioCtx = null;
+  let muted = localStorage.getItem("maze-rooms-muted") === "1";
+
+  function ensureAudioContext() {
+    if (!audioCtx) {
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContextCtor();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+
+  // Schedules a single tone at `startOffset` seconds from now with a quick
+  // attack/decay envelope so notes click in cleanly and taper off instead of
+  // popping when they stop.
+  function scheduleTone(freq, startOffset, duration, { type = "triangle", volume = 0.18 } = {}) {
+    if (muted || !audioCtx) return;
+    const t0 = audioCtx.currentTime + startOffset;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(volume, t0 + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.02);
+    return osc;
+  }
+
+  // gem value -> pitch on an ascending scale, so rarer/pricier gems ring out
+  // higher and brighter than common ones.
+  const GEM_PITCH_BY_VALUE = { 10: 523, 15: 587, 20: 659, 25: 784, 35: 880, 50: 1047 };
+
+  const sfx = {
+    gem(value) {
+      if (!audioCtx) return;
+      const freq = GEM_PITCH_BY_VALUE[value] || 700;
+      scheduleTone(freq, 0, 0.14, { type: "triangle", volume: 0.2 });
+      if (value >= 35) scheduleTone(freq * 1.5, 0.05, 0.12, { type: "triangle", volume: 0.14 });
+    },
+    key() {
+      if (!audioCtx) return;
+      scheduleTone(660, 0, 0.12, { type: "triangle", volume: 0.2 });
+      scheduleTone(990, 0.1, 0.18, { type: "triangle", volume: 0.22 });
+    },
+    hit() {
+      if (!audioCtx) return;
+      scheduleTone(140, 0, 0.22, { type: "sawtooth", volume: 0.22 });
+      scheduleTone(90, 0.05, 0.2, { type: "sawtooth", volume: 0.18 });
+    },
+    win() {
+      if (!audioCtx) return;
+      [523, 659, 784, 1047].forEach((freq, i) => {
+        scheduleTone(freq, i * 0.11, 0.16, { type: "triangle", volume: 0.2 });
+      });
+    },
+    gameOver() {
+      if (!audioCtx) return;
+      [392, 330, 262].forEach((freq, i) => {
+        scheduleTone(freq, i * 0.22, 0.3, { type: "sawtooth", volume: 0.18 });
+      });
+    },
+  };
+
+  function setupMute() {
+    const btn = document.getElementById("btn-mute");
+    const updateLabel = () => {
+      btn.textContent = muted ? "🔇" : "🔊";
+      btn.title = muted ? "Geluid aan" : "Geluid uit";
+    };
+    btn.addEventListener("click", () => {
+      muted = !muted;
+      localStorage.setItem("maze-rooms-muted", muted ? "1" : "0");
+      if (!muted) ensureAudioContext();
+      updateLabel();
+    });
+    updateLabel();
+  }
+
   // ---------- room-graph (which rooms connect to which, and where) ----------
   function buildRoomGraph() {
     const n = RG_COLS * RG_ROWS;
@@ -589,17 +671,20 @@
     if (room.hasKey && !room.keyCollected && player.x === room.keyPos.x && player.y === room.keyPos.y) {
       room.keyCollected = true;
       player.hasKey = true;
+      sfx.key();
       updateHud();
     }
     for (const g of room.gems) {
       if (!g.collected && player.x === g.x && player.y === g.y) {
         g.collected = true;
         score += g.value;
+        sfx.gem(g.value);
         updateHud();
       }
     }
     if (room.hasDoor && player.x === room.doorPos.x && player.y === room.doorPos.y && player.hasKey) {
       won = true;
+      sfx.win();
       showOverlay("Level voltooid!", `Je hebt de deur bereikt met ${score} punten.`, "Volgende level");
     }
     if (player.invulnUntil <= performance.now()) {
@@ -618,9 +703,11 @@
   function hitPlayer() {
     lives -= 1;
     player.invulnUntil = performance.now() + INVULN_MS;
+    sfx.hit();
     updateHud();
     if (lives <= 0) {
       gameOver = true;
+      sfx.gameOver();
       showOverlay("Game Over", `Je werd gepakt door een duivel. Score: ${score}`, "Opnieuw beginnen");
     } else {
       curRx = 0;
@@ -680,6 +767,7 @@
       const dir = KEY_DIR[e.key];
       if (dir) {
         e.preventDefault();
+        if (!muted) ensureAudioContext(); // unlock audio from this real user gesture
         heldDirs.add(dir);
       }
     });
@@ -834,6 +922,7 @@
     }
 
     stage.addEventListener("pointerdown", (e) => {
+      if (!muted) ensureAudioContext(); // unlock audio from this real user gesture
       if (activePointerId !== null) return;
       if (gameOver || won) return;
       if (!overlay.classList.contains("hidden") || !helpOverlay.classList.contains("hidden")) return;
@@ -900,6 +989,7 @@
     setupInput();
     setupFullscreen();
     setupJoystick();
+    setupMute();
     await loadImages(SPRITE_NAMES);
     newLevel(0);
     setupHudSizing(); // after newLevel() so canvas.width/height reflect the real maze size
