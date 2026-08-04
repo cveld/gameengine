@@ -8,6 +8,7 @@ import { HomeComponent } from './home/home.component';
 import { MemoryComponent } from './memory/memory.component';
 import { SimonComponent } from './simon/simon.component';
 import { MazeComponent } from './maze/maze.component';
+import { MazeRoomsComponent } from './maze-rooms/maze-rooms.component';
 const routes: Routes = [
   { path: '', component: HomeComponent },
   {
@@ -21,6 +22,7 @@ const routes: Routes = [
   { path: 'memory', component: MemoryComponent },
   { path: 'simon', component: SimonComponent },
   { path: 'maze', component: MazeComponent },
+  { path: 'maze-rooms', component: MazeRoomsComponent },
   { path: '**', redirectTo: '' },
 ];
 

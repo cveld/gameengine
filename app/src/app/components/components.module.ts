@@ -13,6 +13,7 @@ import { HomeComponent } from "../home/home.component";
 import { MemoryComponent } from "../memory/memory.component";
 import { SimonComponent } from "../simon/simon.component";
 import { MazeComponent } from "../maze/maze.component";
+import { MazeRoomsComponent } from "../maze-rooms/maze-rooms.component";
 
 @NgModule({
   declarations: [
@@ -26,7 +27,8 @@ import { MazeComponent } from "../maze/maze.component";
     HomeComponent,
     MemoryComponent,
     SimonComponent,
-    MazeComponent
+    MazeComponent,
+    MazeRoomsComponent
   ],
   imports: [
     AppRoutingModule,
