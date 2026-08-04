@@ -38,15 +38,27 @@
     { name: "floor_skull", weight: 1 },
   ];
 
-  const DECOR_PROPS = ["torch", "skull", "bone", "rock_small", "rock_big", "grass"];
+  const DECOR_PROPS = ["skull", "bone", "rock_small", "rock_big", "grass"];
+
+  // picking up a torch scares off every devil for a while: they stop
+  // moving and can't hurt the player. Reserved exclusively for this pickup
+  // so a lit torch on the floor always means "grab me", never decoration.
+  const FREEZE_DURATION_MS = 8000;
+
+  // the source sheet's "walk" row turned out to be 4 frames of a single
+  // rightward run cycle rather than 4 per-direction poses; mirror them for
+  // left, and fall back to the static pose for up/down (no run art exists).
+  const HERO_RUN_FRAMES = ["hero_run0", "hero_run1", "hero_run2", "hero_run3"];
+  const HERO_RUN_FRAME_MS = 110;
 
   const SPRITE_NAMES = [
     "hero_down", "hero_left", "hero_up", "hero_right",
-    "hero_down_walk", "hero_left_walk", "hero_up_walk", "hero_right_walk",
+    "hero_run0", "hero_run1", "hero_run2", "hero_run3",
     "devil_down", "devil_left", "devil_up", "devil_right",
     "devil_down_walk", "devil_left_walk", "devil_up_walk", "devil_right_walk",
     "gem_blue", "gem_green", "gem_red", "gem_orange", "gem_white", "gem_pink",
-    "wall_block",
+    "wall_fill", "border_top", "border_bottom", "border_left", "border_right",
+    "wall_fill_light", "border_top_light", "border_bottom_light", "border_left_light", "border_right_light",
     "floor_plain", "floor_pebbles", "floor_rocks", "floor_grass",
     "floor_cracked1", "floor_cracked2", "floor_skull",
     "door", "key", "rock_small", "rock_big", "bone", "skull", "torch", "grass",
@@ -90,6 +102,108 @@
     );
   }
 
+  // ---------- sound effects (synthesized, no audio files needed) ----------
+  let audioCtx = null;
+  let muted = localStorage.getItem("maze-muted") === "1";
+
+  function ensureAudioContext() {
+    if (!audioCtx) {
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContextCtor();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+
+  // Schedules a single tone at `startOffset` seconds from now with a quick
+  // attack/decay envelope so notes click in cleanly and taper off instead of
+  // popping when they stop.
+  function scheduleTone(freq, startOffset, duration, { type = "triangle", volume = 0.18 } = {}) {
+    if (muted || !audioCtx) return;
+    const t0 = audioCtx.currentTime + startOffset;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(volume, t0 + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.02);
+    return osc;
+  }
+
+  function scheduleSweep(fromFreq, toFreq, startOffset, duration, { type = "sine", volume = 0.15 } = {}) {
+    if (muted || !audioCtx) return;
+    const t0 = audioCtx.currentTime + startOffset;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(fromFreq, t0);
+    osc.frequency.exponentialRampToValueAtTime(toFreq, t0 + duration);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(volume, t0 + duration * 0.3);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.02);
+  }
+
+  // gem value -> pitch on an ascending scale, so rarer/pricier gems ring out
+  // higher and brighter than common ones.
+  const GEM_PITCH_BY_VALUE = { 10: 523, 15: 587, 20: 659, 25: 784, 35: 880, 50: 1047 };
+
+  const sfx = {
+    gem(value) {
+      if (!audioCtx) return;
+      const freq = GEM_PITCH_BY_VALUE[value] || 700;
+      scheduleTone(freq, 0, 0.14, { type: "triangle", volume: 0.2 });
+      if (value >= 35) scheduleTone(freq * 1.5, 0.05, 0.12, { type: "triangle", volume: 0.14 });
+    },
+    key() {
+      if (!audioCtx) return;
+      scheduleTone(660, 0, 0.12, { type: "triangle", volume: 0.2 });
+      scheduleTone(990, 0.1, 0.18, { type: "triangle", volume: 0.22 });
+    },
+    torch() {
+      if (!audioCtx) return;
+      scheduleSweep(200, 900, 0, 0.35, { type: "sawtooth", volume: 0.12 });
+    },
+    hit() {
+      if (!audioCtx) return;
+      scheduleTone(140, 0, 0.22, { type: "sawtooth", volume: 0.22 });
+      scheduleTone(90, 0.05, 0.2, { type: "sawtooth", volume: 0.18 });
+    },
+    win() {
+      if (!audioCtx) return;
+      [523, 659, 784, 1047].forEach((freq, i) => {
+        scheduleTone(freq, i * 0.11, 0.16, { type: "triangle", volume: 0.2 });
+      });
+    },
+    gameOver() {
+      if (!audioCtx) return;
+      [392, 330, 262].forEach((freq, i) => {
+        scheduleTone(freq, i * 0.22, 0.3, { type: "sawtooth", volume: 0.18 });
+      });
+    },
+  };
+
+  function setupMute() {
+    const btn = document.getElementById("btn-mute");
+    const updateLabel = () => {
+      btn.textContent = muted ? "🔇" : "🔊";
+      btn.title = muted ? "Geluid aan" : "Geluid uit";
+    };
+    btn.addEventListener("click", () => {
+      muted = !muted;
+      localStorage.setItem("maze-muted", muted ? "1" : "0");
+      if (!muted) ensureAudioContext();
+      updateLabel();
+    });
+    updateLabel();
+  }
+
   // ---------- maze generation ----------
   function generateMaze() {
     const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(WALL));
@@ -126,6 +240,41 @@
     return grid;
   }
 
+  // Wall cells in this maze are almost always one giant connected mass (the
+  // outer border plus most internal walls touch each other), so a plain
+  // flood fill would just recolor the entire maze a single color. Instead,
+  // grow same-color patches with a random size cap: each patch is still a
+  // single contiguous run (never flips color partway through, per the "a
+  // segment can only be 1 color" requirement), but a large wall mass gets
+  // carved into several independently-colored patches for real variety.
+  function computeWallVariants(grid) {
+    const variant = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    for (let sy = 0; sy < ROWS; sy++) {
+      for (let sx = 0; sx < COLS; sx++) {
+        if (grid[sy][sx] !== WALL || variant[sy][sx]) continue;
+        const color = Math.random() < 0.5 ? "dark" : "light";
+        const cap = 8 + Math.floor(Math.random() * 14); // ~8-21 cells per patch
+        const queue = [[sx, sy]];
+        variant[sy][sx] = color;
+        let claimed = 1;
+        let head = 0;
+        while (head < queue.length && claimed < cap) {
+          const [cx, cy] = queue[head++];
+          for (const d of Object.values(DIRS)) {
+            const nx = cx + d.dx, ny = cy + d.dy;
+            if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue;
+            if (grid[ny][nx] !== WALL || variant[ny][nx]) continue;
+            variant[ny][nx] = color;
+            queue.push([nx, ny]);
+            claimed++;
+            if (claimed >= cap) break;
+          }
+        }
+      }
+    }
+    return variant;
+  }
+
   function bfs(grid, sx, sy) {
     const dist = Array.from({ length: ROWS }, () => Array(COLS).fill(-1));
     dist[sy][sx] = 0;
@@ -148,12 +297,13 @@
 
   // ---------- game state ----------
   let canvas, ctx;
-  let grid, floorVariant, decor;
-  let start, door, keyItem, gems, enemies;
+  let grid, floorVariant, decor, wallVariant;
+  let start, door, keyItem, gems, enemies, torchPowerup;
   let player;
   let score = 0, lives = 3, level = 1;
   let gameOver = false, won = false;
   let lastEnemyTick = 0;
+  let freezeUntil = 0;
   let usedCells;
 
   function farthestCell(dist) {
@@ -185,6 +335,7 @@
 
   function newLevel(carryScore) {
     grid = generateMaze();
+    wallVariant = computeWallVariants(grid);
     usedCells = new Set();
     start = { x: 1, y: 1 };
     claim(start.x, start.y);
@@ -232,6 +383,16 @@
       gems.push({ x: c.x, y: c.y, type: type.name, value: type.value, collected: false });
       claim(c.x, c.y);
     }
+
+    // torch power-up: temporarily scares off the devils
+    torchPowerup = null;
+    const torchCandidates = floorCells(dist, Math.floor(far.d * 0.15)).filter((c) => isFree(c.x, c.y));
+    if (torchCandidates.length) {
+      const c = torchCandidates[Math.floor(Math.random() * torchCandidates.length)];
+      torchPowerup = { x: c.x, y: c.y, collected: false };
+      claim(c.x, c.y);
+    }
+    freezeUntil = 0;
 
     // enemies: spawn reasonably far from player
     enemies = [];
@@ -286,6 +447,34 @@
     ctx.drawImage(img, dx, dy, w, h);
   }
 
+  function drawEdge(name, cx, cy, side) {
+    const img = images[name];
+    if (!img || !img.complete || img.naturalWidth === 0) return;
+    if (side === "top" || side === "bottom") {
+      const thickness = TILE * (img.naturalHeight / img.naturalWidth);
+      const dy = side === "top" ? cy : cy + TILE - thickness;
+      ctx.drawImage(img, cx, dy, TILE, thickness);
+    } else {
+      const thickness = TILE * (img.naturalWidth / img.naturalHeight);
+      const dx = side === "left" ? cx : cx + TILE - thickness;
+      ctx.drawImage(img, dx, cy, thickness, TILE);
+    }
+  }
+
+  function drawWallCell(x, y, cx, cy) {
+    // each connected run of wall cells commits to one palette (see
+    // computeWallVariants) so a segment never flips color partway through.
+    const suffix = wallVariant[y][x] === "light" ? "_light" : "";
+    drawSprite("wall_fill" + suffix, cx, cy, { fit: "cover" });
+    // draw a lit stone border only on edges that face an open path, so
+    // walls read as a connected rock face hugging the corridors instead
+    // of a repeating isolated block.
+    if (y > 0 && grid[y - 1][x] === FLOOR) drawEdge("border_top" + suffix, cx, cy, "top");
+    if (y < ROWS - 1 && grid[y + 1][x] === FLOOR) drawEdge("border_bottom" + suffix, cx, cy, "bottom");
+    if (x > 0 && grid[y][x - 1] === FLOOR) drawEdge("border_left" + suffix, cx, cy, "left");
+    if (x < COLS - 1 && grid[y][x + 1] === FLOOR) drawEdge("border_right" + suffix, cx, cy, "right");
+  }
+
   function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -296,7 +485,7 @@
         if (grid[y][x] === FLOOR) {
           drawSprite(floorVariant[y][x], cx, cy, { fit: "cover" });
         } else {
-          drawSprite("wall_block", cx, cy, { fit: "cover" });
+          drawWallCell(x, y, cx, cy);
         }
       }
     }
@@ -319,30 +508,57 @@
       if (!g.collected) drawSprite(g.type, g.x * TILE, g.y * TILE, { scale: 0.65 });
     }
 
+    // torch power-up
+    if (torchPowerup && !torchPowerup.collected) {
+      drawSprite("torch", torchPowerup.x * TILE, torchPowerup.y * TILE, { scale: 0.75 });
+    }
+
     // entities sorted by row for pseudo depth
     const entities = [
       ...enemies.map((e) => ({ ...e, kind: "devil" })),
       { ...player, kind: "hero" },
     ].sort((a, b) => a.py - b.py);
 
+    const frozen = performance.now() < freezeUntil;
     for (const e of entities) {
-      const walkFrame = e.moving && Math.floor(performance.now() / 150) % 2 === 0 ? "_walk" : "";
       const blink = e.kind === "hero" && player.invulnUntil > performance.now() && Math.floor(performance.now() / 100) % 2 === 0;
       if (blink) continue;
-      const sprite = `${e.kind === "hero" ? "hero" : "devil"}_${e.facing}${walkFrame}`;
-      drawSpritePixel(sprite, e.px, e.py);
+      if (e.kind === "hero") {
+        drawHero(e);
+      } else {
+        const walkFrame = e.moving && Math.floor(performance.now() / 150) % 2 === 0 ? "_walk" : "";
+        if (frozen) ctx.globalAlpha = 0.35;
+        drawSpritePixel(`devil_${e.facing}${walkFrame}`, e.px, e.py);
+        if (frozen) ctx.globalAlpha = 1;
+      }
     }
   }
 
-  function drawSpritePixel(name, px, py) {
+  function drawHero(e) {
+    if (e.moving && (e.facing === "left" || e.facing === "right")) {
+      const frame = HERO_RUN_FRAMES[Math.floor(performance.now() / HERO_RUN_FRAME_MS) % HERO_RUN_FRAMES.length];
+      drawSpritePixel(frame, e.px, e.py, e.facing === "left");
+    } else {
+      drawSpritePixel(`hero_${e.facing}`, e.px, e.py);
+    }
+  }
+
+  function drawSpritePixel(name, px, py, mirror = false) {
     const img = images[name];
     if (!img || !img.complete || img.naturalWidth === 0) return;
     const w = TILE;
     const ratio = img.naturalHeight / img.naturalWidth;
     const h = w * ratio;
-    const dx = px;
     const dy = py + TILE - h;
-    ctx.drawImage(img, dx, dy, w, h);
+    if (mirror) {
+      ctx.save();
+      ctx.translate(px + w, dy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, w, h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, px, dy, w, h);
+    }
   }
 
   // ---------- movement ----------
@@ -407,22 +623,32 @@
     if (!keyItem.collected && player.x === keyItem.x && player.y === keyItem.y) {
       keyItem.collected = true;
       player.hasKey = true;
+      sfx.key();
       updateHud();
     }
     for (const g of gems) {
       if (!g.collected && player.x === g.x && player.y === g.y) {
         g.collected = true;
         score += g.value;
+        sfx.gem(g.value);
         updateHud();
       }
+    }
+    if (torchPowerup && !torchPowerup.collected && player.x === torchPowerup.x && player.y === torchPowerup.y) {
+      torchPowerup.collected = true;
+      freezeUntil = performance.now() + FREEZE_DURATION_MS;
+      sfx.torch();
+      updateHud();
     }
     if (player.x === door.x && player.y === door.y) {
       if (player.hasKey) {
         won = true;
+        sfx.win();
         showOverlay("Level voltooid!", `Je hebt de deur bereikt met ${score} punten.`, "Volgende level");
       }
     }
-    if (player.invulnUntil <= performance.now()) {
+    const now = performance.now();
+    if (player.invulnUntil <= now && now >= freezeUntil) {
       for (const e of enemies) {
         if (e.x === player.x && e.y === player.y) {
           hitPlayer();
@@ -435,9 +661,11 @@
   function hitPlayer() {
     lives -= 1;
     player.invulnUntil = performance.now() + INVULN_MS;
+    sfx.hit();
     updateHud();
     if (lives <= 0) {
       gameOver = true;
+      sfx.gameOver();
       showOverlay("Game Over", `Je werd gepakt door een duivel. Score: ${score}`, "Opnieuw beginnen");
     } else {
       player.x = start.x;
@@ -456,6 +684,17 @@
     document.getElementById("stat-level").textContent = `🏰 ${level}`;
   }
 
+  function updateFreezeHud(now) {
+    const el = document.getElementById("stat-freeze");
+    const remaining = freezeUntil - now;
+    if (remaining <= 0) {
+      el.classList.add("hidden");
+      return;
+    }
+    el.classList.remove("hidden");
+    document.getElementById("freeze-state").textContent = Math.ceil(remaining / 1000);
+  }
+
   function showOverlay(title, text, btnLabel) {
     document.getElementById("overlay-title").textContent = title;
     document.getElementById("overlay-text").textContent = text;
@@ -466,6 +705,104 @@
     document.getElementById("overlay").classList.add("hidden");
   }
 
+  // ---------- fullscreen ----------
+  function setupFullscreen() {
+    const btn = document.getElementById("btn-fullscreen");
+    const el = document.getElementById("game");
+    const request = el.requestFullscreen || el.webkitRequestFullscreen;
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!request || !exit) {
+      btn.classList.add("hidden");
+      return;
+    }
+    const isFullscreen = () => Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+    const updateLabel = () => {
+      btn.title = isFullscreen() ? "Verlaat fullscreen" : "Fullscreen";
+    };
+    btn.addEventListener("click", () => {
+      if (isFullscreen()) {
+        exit.call(document);
+      } else {
+        const result = request.call(el);
+        if (result && typeof result.catch === "function") result.catch(() => {});
+      }
+    });
+    document.addEventListener("fullscreenchange", updateLabel);
+    document.addEventListener("webkitfullscreenchange", updateLabel);
+    updateLabel();
+  }
+
+  // Keep the HUD bar tied to the maze's actual on-screen top row (portrait)
+  // or left column (landscape), so it sits inside that row/column instead
+  // of overlapping into the gameplay area next to it. When the maze is
+  // letterboxed on that axis (dead space above it, or to its left) park the
+  // HUD there instead of squeezing into a strip that might be tiny.
+  const HUD_MIN_PX = 30;
+  const HUD_MAX_PX = 52;
+  function setupHudSizing() {
+    const hud = document.getElementById("hud");
+    const stage = document.getElementById("stage");
+    const btnNew = document.getElementById("btn-new");
+    const landscapeMQ = window.matchMedia("(orientation: landscape)");
+    const sync = () => {
+      // canvas.getBoundingClientRect() is the element's full CSS box, not the
+      // letterboxed content rect that object-fit: contain actually paints
+      // into — work out the real visible maze rect ourselves so the HUD
+      // lines up with it regardless of which way it's letterboxed.
+      const box = canvas.getBoundingClientRect();
+      const stageRect = stage.getBoundingClientRect();
+      if (box.height <= 0 || box.width <= 0) return;
+      const contentAspect = canvas.width / canvas.height;
+      const boxAspect = box.width / box.height;
+      let contentW, contentH;
+      if (boxAspect > contentAspect) {
+        contentH = box.height;
+        contentW = contentH * contentAspect;
+      } else {
+        contentW = box.width;
+        contentH = contentW / contentAspect;
+      }
+      const contentLeft = box.left + (box.width - contentW) / 2;
+      const contentTop = box.top + (box.height - contentH) / 2;
+      const isVertical = landscapeMQ.matches;
+
+      hud.classList.toggle("hud-vertical", isVertical);
+      btnNew.textContent = isVertical ? "+" : "Nieuwe Maze";
+      btnNew.title = isVertical ? "Nieuwe Maze" : "";
+
+      if (isVertical) {
+        const leftGap = contentLeft - box.left; // dead letterbox space left of the maze, if any
+        hud.style.width = ""; // let .hud-vertical's width: var(--row) apply
+        hud.style.top = `${contentTop - stageRect.top}px`;
+        hud.style.height = `${contentH}px`;
+        if (leftGap >= HUD_MIN_PX) {
+          const colPx = Math.min(leftGap, HUD_MAX_PX);
+          hud.style.left = `${contentLeft - stageRect.left - colPx}px`;
+          hud.style.setProperty("--row", `${colPx}px`);
+        } else {
+          hud.style.left = `${contentLeft - stageRect.left}px`;
+          hud.style.setProperty("--row", `${contentW / COLS}px`);
+        }
+      } else {
+        const topGap = contentTop - box.top; // dead letterbox space above the maze, if any
+        hud.style.height = ""; // let #hud's height: var(--row) apply
+        hud.style.left = `${contentLeft - stageRect.left}px`;
+        hud.style.width = `${contentW}px`;
+        if (topGap >= HUD_MIN_PX) {
+          const rowPx = Math.min(topGap, HUD_MAX_PX);
+          hud.style.top = `${contentTop - stageRect.top - rowPx}px`;
+          hud.style.setProperty("--row", `${rowPx}px`);
+        } else {
+          hud.style.top = `${contentTop - stageRect.top}px`;
+          hud.style.setProperty("--row", `${contentH / ROWS}px`);
+        }
+      }
+    };
+    new ResizeObserver(sync).observe(canvas);
+    landscapeMQ.addEventListener("change", sync);
+    sync();
+  }
+
   // ---------- input ----------
   const KEY_DIR = {
     ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
@@ -473,8 +810,10 @@
     W: "up", S: "down", A: "left", D: "right",
   };
   let queuedDir = null;
+  let touchDir = null;
 
   function handleDir(dir) {
+    if (!muted) ensureAudioContext(); // unlock audio from this real user gesture
     if (gameOver || won) return;
     queuedDir = dir;
   }
@@ -487,11 +826,6 @@
         handleDir(dir);
       }
     });
-    for (const btn of document.querySelectorAll("#dpad button")) {
-      const dir = btn.dataset.dir;
-      btn.addEventListener("touchstart", (e) => { e.preventDefault(); handleDir(dir); }, { passive: false });
-      btn.addEventListener("mousedown", () => handleDir(dir));
-    }
     document.getElementById("btn-new").addEventListener("click", () => {
       level = 1;
       score = 0;
@@ -509,6 +843,69 @@
         newLevel(0);
       }
     });
+    document.getElementById("btn-help").addEventListener("click", () => {
+      document.getElementById("help-overlay").classList.remove("hidden");
+    });
+    document.getElementById("help-close").addEventListener("click", () => {
+      document.getElementById("help-overlay").classList.add("hidden");
+    });
+  }
+
+  // touch/mouse-drag joystick: touch anywhere on the stage and drag toward
+  // an edge to move that direction, for as long as the drag stays deflected.
+  function setupJoystick() {
+    const stage = document.getElementById("stage");
+    const joystick = document.getElementById("joystick");
+    const knob = document.getElementById("joystick-knob");
+    const overlay = document.getElementById("overlay");
+    const helpOverlay = document.getElementById("help-overlay");
+    const MAX_RADIUS = 40;
+    const DEAD_ZONE = 12;
+
+    let activePointerId = null;
+    let originX = 0, originY = 0;
+
+    function dirFromDelta(dx, dy) {
+      if (Math.hypot(dx, dy) < DEAD_ZONE) return null;
+      return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+    }
+
+    stage.addEventListener("pointerdown", (e) => {
+      if (!muted) ensureAudioContext(); // unlock audio from this real user gesture
+      if (activePointerId !== null) return;
+      if (gameOver || won) return;
+      if (!overlay.classList.contains("hidden") || !helpOverlay.classList.contains("hidden")) return;
+      if (e.target.closest("#hud")) return;
+      activePointerId = e.pointerId;
+      const rect = stage.getBoundingClientRect();
+      originX = e.clientX - rect.left;
+      originY = e.clientY - rect.top;
+      joystick.style.left = `${originX}px`;
+      joystick.style.top = `${originY}px`;
+      knob.style.transform = "translate(0, 0)";
+      joystick.classList.remove("hidden");
+      stage.setPointerCapture(e.pointerId);
+    });
+
+    stage.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== activePointerId) return;
+      const rect = stage.getBoundingClientRect();
+      const dx = e.clientX - rect.left - originX;
+      const dy = e.clientY - rect.top - originY;
+      const dist = Math.min(MAX_RADIUS, Math.hypot(dx, dy));
+      const angle = Math.atan2(dy, dx);
+      knob.style.transform = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`;
+      touchDir = dirFromDelta(dx, dy);
+    });
+
+    function release(e) {
+      if (e.pointerId !== activePointerId) return;
+      activePointerId = null;
+      touchDir = null;
+      joystick.classList.add("hidden");
+    }
+    stage.addEventListener("pointerup", release);
+    stage.addEventListener("pointercancel", release);
   }
 
   // ---------- main loop ----------
@@ -518,17 +915,23 @@
         tryMove(player, queuedDir);
         queuedDir = null;
       }
+      if (touchDir && !player.moving) {
+        tryMove(player, touchDir);
+      }
       updateMovement(player, PLAYER_MOVE_MS, now);
       for (const e of enemies) updateMovement(e, ENEMY_MOVE_MS * 0.9, now);
 
       if (now - lastEnemyTick > ENEMY_MOVE_MS) {
         lastEnemyTick = now;
-        for (const e of enemies) {
-          if (!e.moving) enemyStep(e);
+        if (now >= freezeUntil) {
+          for (const e of enemies) {
+            if (!e.moving) enemyStep(e);
+          }
         }
       }
       checkCollisions();
     }
+    updateFreezeHud(now);
     render();
     requestAnimationFrame(loop);
   }
@@ -539,8 +942,12 @@
     ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
     setupInput();
+    setupFullscreen();
+    setupJoystick();
+    setupMute();
     await loadImages(SPRITE_NAMES);
     newLevel(0);
+    setupHudSizing(); // after newLevel() so canvas.width/height reflect the real maze size
     requestAnimationFrame(loop);
   }
 
