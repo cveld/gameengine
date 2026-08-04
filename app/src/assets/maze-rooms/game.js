@@ -19,12 +19,35 @@
   const WALL = 0;
   const FLOOR = 1;
 
+  // 4-directional: used for enemy pathing/AI, which only has 4-way sprites
   const DIRS = {
     up: { dx: 0, dy: -1 },
     down: { dx: 0, dy: 1 },
     left: { dx: -1, dy: 0 },
     right: { dx: 1, dy: 0 },
   };
+
+  // the player can also move diagonally; these are only looked up by
+  // tryMove(), never fed into bfs()/enemyStep() which stay 4-directional
+  const DIAGONAL_DIRS = {
+    "up-left": { dx: -1, dy: -1 },
+    "up-right": { dx: 1, dy: -1 },
+    "down-left": { dx: -1, dy: 1 },
+    "down-right": { dx: 1, dy: 1 },
+  };
+  const ALL_DIRS = { ...DIRS, ...DIAGONAL_DIRS };
+
+  // the sprite sheet only has down/left/up/right poses, so a diagonal move
+  // faces (and animates) as a horizontal run in the matching direction
+  const DIAGONAL_FACING = {
+    "up-left": "left", "down-left": "left",
+    "up-right": "right", "down-right": "right",
+  };
+
+  // the source sheet's "walk" row is 4 frames of a rightward run cycle;
+  // mirror them for left, and fall back to the static pose for up/down.
+  const HERO_RUN_FRAMES = ["hero_run0", "hero_run1", "hero_run2", "hero_run3"];
+  const HERO_RUN_FRAME_MS = 110;
 
   const GEM_TYPES = [
     { name: "gem_blue", value: 10, weight: 30 },
@@ -49,6 +72,7 @@
 
   const SPRITE_NAMES = [
     "hero_down", "hero_left", "hero_up", "hero_right",
+    "hero_run0", "hero_run1", "hero_run2", "hero_run3",
     "devil_down", "devil_left", "devil_up", "devil_right",
     "devil_down_walk", "devil_left_walk", "devil_up_walk", "devil_right_walk",
     "gem_blue", "gem_green", "gem_red", "gem_orange", "gem_white", "gem_pink",
@@ -427,35 +451,60 @@
     ].sort((a, b) => a.py - b.py);
 
     for (const e of entities) {
-      // devils have a walk-cycle frame; the hero sprite sheet only has static poses
-      const walkFrame = e.kind === "devil" && e.moving && Math.floor(performance.now() / 150) % 2 === 0 ? "_walk" : "";
       const blink = e.kind === "hero" && player.invulnUntil > performance.now() && Math.floor(performance.now() / 100) % 2 === 0;
       if (blink) continue;
-      const sprite = `${e.kind === "hero" ? "hero" : "devil"}_${e.facing}${walkFrame}`;
-      drawSpritePixel(sprite, e.px, e.py);
+      if (e.kind === "hero") {
+        drawHero(e);
+      } else {
+        // devils have a walk-cycle frame; the hero sprite sheet only has static poses
+        const walkFrame = e.moving && Math.floor(performance.now() / 150) % 2 === 0 ? "_walk" : "";
+        drawSpritePixel(`devil_${e.facing}${walkFrame}`, e.px, e.py);
+      }
     }
   }
 
-  function drawSpritePixel(name, px, py) {
+  function drawHero(e) {
+    if (e.moving && (e.facing === "left" || e.facing === "right")) {
+      const frame = HERO_RUN_FRAMES[Math.floor(performance.now() / HERO_RUN_FRAME_MS) % HERO_RUN_FRAMES.length];
+      drawSpritePixel(frame, e.px, e.py, e.facing === "left");
+    } else {
+      drawSpritePixel(`hero_${e.facing}`, e.px, e.py);
+    }
+  }
+
+  function drawSpritePixel(name, px, py, mirror = false) {
     const img = images[name];
     if (!img || !img.complete || img.naturalWidth === 0) return;
     const w = TILE;
     const ratio = img.naturalHeight / img.naturalWidth;
     const h = w * ratio;
-    const dx = px;
     const dy = py + TILE - h;
-    ctx.drawImage(img, dx, dy, w, h);
+    if (mirror) {
+      ctx.save();
+      ctx.translate(px + w, dy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, w, h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, px, dy, w, h);
+    }
   }
 
   // ---------- movement ----------
   function tryMove(entity, dir) {
     if (entity.moving) return false;
-    const d = DIRS[dir];
+    const d = ALL_DIRS[dir];
+    if (!d) return false;
     const nx = entity.x + d.dx;
     const ny = entity.y + d.dy;
     if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) return false;
     if (activeRoom.grid[ny][nx] !== FLOOR) return false;
-    entity.facing = dir;
+    if (d.dx !== 0 && d.dy !== 0) {
+      // don't let a diagonal move cut through a solid corner
+      const orthoBlocked = activeRoom.grid[entity.y][nx] !== FLOOR && activeRoom.grid[ny][entity.x] !== FLOOR;
+      if (orthoBlocked) return false;
+    }
+    entity.facing = DIAGONAL_FACING[dir] || dir;
     entity.from = { x: entity.x, y: entity.y };
     entity.x = nx;
     entity.y = ny;
@@ -611,12 +660,17 @@
     w: "up", s: "down", a: "left", d: "right",
     W: "up", S: "down", A: "left", D: "right",
   };
-  let queuedDir = null;
+  // held (not just pressed) so opposite/adjacent keys combine into diagonals
+  const heldDirs = new Set();
   let touchDir = null;
 
-  function handleDir(dir) {
-    if (gameOver || won) return;
-    queuedDir = dir;
+  function keyboardDir() {
+    const dy = (heldDirs.has("down") ? 1 : 0) - (heldDirs.has("up") ? 1 : 0);
+    const dx = (heldDirs.has("right") ? 1 : 0) - (heldDirs.has("left") ? 1 : 0);
+    if (dx === 0 && dy === 0) return null;
+    if (dx === 0) return dy > 0 ? "down" : "up";
+    if (dy === 0) return dx > 0 ? "right" : "left";
+    return `${dy > 0 ? "down" : "up"}-${dx > 0 ? "right" : "left"}`;
   }
 
   function setupInput() {
@@ -624,9 +678,14 @@
       const dir = KEY_DIR[e.key];
       if (dir) {
         e.preventDefault();
-        handleDir(dir);
+        heldDirs.add(dir);
       }
     });
+    window.addEventListener("keyup", (e) => {
+      const dir = KEY_DIR[e.key];
+      if (dir) heldDirs.delete(dir);
+    });
+    window.addEventListener("blur", () => heldDirs.clear());
     document.getElementById("btn-new").addEventListener("click", () => {
       level = 1;
       score = 0;
@@ -764,9 +823,12 @@
     let activePointerId = null;
     let originX = 0, originY = 0;
 
+    // snap the drag angle to one of 8 directions (4 cardinal + 4 diagonal)
+    const OCTANT_DIRS = ["right", "down-right", "down", "down-left", "left", "up-left", "up", "up-right"];
     function dirFromDelta(dx, dy) {
       if (Math.hypot(dx, dy) < DEAD_ZONE) return null;
-      return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+      const octant = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+      return OCTANT_DIRS[((octant % 8) + 8) % 8];
     }
 
     stage.addEventListener("pointerdown", (e) => {
@@ -809,12 +871,9 @@
   // ---------- main loop ----------
   function loop(now) {
     if (!gameOver && !won) {
-      if (queuedDir && !player.moving) {
-        tryMove(player, queuedDir);
-        queuedDir = null;
-      }
-      if (touchDir && !player.moving) {
-        tryMove(player, touchDir);
+      if (!player.moving) {
+        const dir = keyboardDir() || touchDir;
+        if (dir) tryMove(player, dir);
       }
       updateMovement(player, PLAYER_MOVE_MS, now);
       for (const e of activeRoom.devils) updateMovement(e, ENEMY_MOVE_MS * 0.9, now);
