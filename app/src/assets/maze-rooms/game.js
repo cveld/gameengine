@@ -49,11 +49,10 @@
 
   const SPRITE_NAMES = [
     "hero_down", "hero_left", "hero_up", "hero_right",
-    "hero_down_walk", "hero_left_walk", "hero_up_walk", "hero_right_walk",
     "devil_down", "devil_left", "devil_up", "devil_right",
     "devil_down_walk", "devil_left_walk", "devil_up_walk", "devil_right_walk",
     "gem_blue", "gem_green", "gem_red", "gem_orange", "gem_white", "gem_pink",
-    "wall_block",
+    "wall_fill",
     "floor_plain", "floor_pebbles", "floor_rocks", "floor_grass",
     "floor_cracked1", "floor_cracked2", "floor_skull",
     "door", "key", "rock_small", "rock_big", "bone", "skull", "torch", "grass",
@@ -398,7 +397,7 @@
         if (room.grid[y][x] === FLOOR) {
           drawSprite(room.floorVariant[y][x], cx, cy, { fit: "cover" });
         } else {
-          drawSprite("wall_block", cx, cy, { fit: "cover" });
+          drawSprite("wall_fill", cx, cy, { fit: "cover" });
         }
       }
     }
@@ -428,7 +427,8 @@
     ].sort((a, b) => a.py - b.py);
 
     for (const e of entities) {
-      const walkFrame = e.moving && Math.floor(performance.now() / 150) % 2 === 0 ? "_walk" : "";
+      // devils have a walk-cycle frame; the hero sprite sheet only has static poses
+      const walkFrame = e.kind === "devil" && e.moving && Math.floor(performance.now() / 150) % 2 === 0 ? "_walk" : "";
       const blink = e.kind === "hero" && player.invulnUntil > performance.now() && Math.floor(performance.now() / 100) % 2 === 0;
       if (blink) continue;
       const sprite = `${e.kind === "hero" ? "hero" : "devil"}_${e.facing}${walkFrame}`;
