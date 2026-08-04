@@ -644,6 +644,12 @@
         newLevel(0);
       }
     });
+    document.getElementById("btn-help").addEventListener("click", () => {
+      document.getElementById("help-overlay").classList.remove("hidden");
+    });
+    document.getElementById("help-close").addEventListener("click", () => {
+      document.getElementById("help-overlay").classList.add("hidden");
+    });
   }
 
   // ---------- fullscreen ----------
@@ -673,6 +679,77 @@
     updateLabel();
   }
 
+  // Keep the HUD bar tied to the maze's actual on-screen top row (portrait)
+  // or left column (landscape), so it sits inside that row/column instead
+  // of overlapping into the gameplay area next to it. When the maze is
+  // letterboxed on that axis (dead space above it, or to its left) park the
+  // HUD there instead of squeezing into a strip that might be tiny.
+  const HUD_MIN_PX = 30;
+  const HUD_MAX_PX = 52;
+  function setupHudSizing() {
+    const hud = document.getElementById("hud");
+    const stage = document.getElementById("stage");
+    const btnNew = document.getElementById("btn-new");
+    const landscapeMQ = window.matchMedia("(orientation: landscape)");
+    const sync = () => {
+      // canvas.getBoundingClientRect() is the element's full CSS box, not the
+      // letterboxed content rect that object-fit: contain actually paints
+      // into — work out the real visible maze rect ourselves so the HUD
+      // lines up with it regardless of which way it's letterboxed.
+      const box = canvas.getBoundingClientRect();
+      const stageRect = stage.getBoundingClientRect();
+      if (box.height <= 0 || box.width <= 0) return;
+      const contentAspect = canvas.width / canvas.height;
+      const boxAspect = box.width / box.height;
+      let contentW, contentH;
+      if (boxAspect > contentAspect) {
+        contentH = box.height;
+        contentW = contentH * contentAspect;
+      } else {
+        contentW = box.width;
+        contentH = contentW / contentAspect;
+      }
+      const contentLeft = box.left + (box.width - contentW) / 2;
+      const contentTop = box.top + (box.height - contentH) / 2;
+      const isVertical = landscapeMQ.matches;
+
+      hud.classList.toggle("hud-vertical", isVertical);
+      btnNew.textContent = isVertical ? "+" : "Nieuwe kamers";
+      btnNew.title = isVertical ? "Nieuwe kamers" : "";
+
+      if (isVertical) {
+        const leftGap = contentLeft - box.left; // dead letterbox space left of the maze, if any
+        hud.style.width = ""; // let .hud-vertical's width: var(--row) apply
+        hud.style.top = `${contentTop - stageRect.top}px`;
+        hud.style.height = `${contentH}px`;
+        if (leftGap >= HUD_MIN_PX) {
+          const colPx = Math.min(leftGap, HUD_MAX_PX);
+          hud.style.left = `${contentLeft - stageRect.left - colPx}px`;
+          hud.style.setProperty("--row", `${colPx}px`);
+        } else {
+          hud.style.left = `${contentLeft - stageRect.left}px`;
+          hud.style.setProperty("--row", `${contentW / COLS}px`);
+        }
+      } else {
+        const topGap = contentTop - box.top; // dead letterbox space above the maze, if any
+        hud.style.height = ""; // let #hud's height: var(--row) apply
+        hud.style.left = `${contentLeft - stageRect.left}px`;
+        hud.style.width = `${contentW}px`;
+        if (topGap >= HUD_MIN_PX) {
+          const rowPx = Math.min(topGap, HUD_MAX_PX);
+          hud.style.top = `${contentTop - stageRect.top - rowPx}px`;
+          hud.style.setProperty("--row", `${rowPx}px`);
+        } else {
+          hud.style.top = `${contentTop - stageRect.top}px`;
+          hud.style.setProperty("--row", `${contentH / ROWS}px`);
+        }
+      }
+    };
+    new ResizeObserver(sync).observe(canvas);
+    landscapeMQ.addEventListener("change", sync);
+    sync();
+  }
+
   // touch/mouse-drag joystick: touch anywhere on the stage and drag toward
   // an edge to move that direction, for as long as the drag stays deflected.
   function setupJoystick() {
@@ -680,6 +757,7 @@
     const joystick = document.getElementById("joystick");
     const knob = document.getElementById("joystick-knob");
     const overlay = document.getElementById("overlay");
+    const helpOverlay = document.getElementById("help-overlay");
     const MAX_RADIUS = 40;
     const DEAD_ZONE = 12;
 
@@ -694,7 +772,7 @@
     stage.addEventListener("pointerdown", (e) => {
       if (activePointerId !== null) return;
       if (gameOver || won) return;
-      if (!overlay.classList.contains("hidden")) return;
+      if (!overlay.classList.contains("hidden") || !helpOverlay.classList.contains("hidden")) return;
       if (e.target.closest("#hud")) return;
       activePointerId = e.pointerId;
       const rect = stage.getBoundingClientRect();
@@ -763,6 +841,7 @@
     setupJoystick();
     await loadImages(SPRITE_NAMES);
     newLevel(0);
+    setupHudSizing(); // after newLevel() so canvas.width/height reflect the real maze size
     requestAnimationFrame(loop);
   }
 

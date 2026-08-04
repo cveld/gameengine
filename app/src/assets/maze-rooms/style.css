@@ -22,11 +22,9 @@ html, body {
   max-width: 1000px;
   height: 100dvh;
   margin: 0 auto;
-  padding: 16px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
 }
 
 #game:fullscreen {
@@ -36,70 +34,10 @@ html, body {
   background: var(--bg);
 }
 
-#hud {
-  width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: var(--panel);
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: 1px solid #2a3145;
-}
-
-#hud h1 {
-  font-size: 1.1rem;
-  margin: 0;
-  color: var(--accent);
-  letter-spacing: 0.5px;
-}
-
-.stats {
-  display: flex;
-  gap: 14px;
-  font-size: 0.95rem;
-}
-
-.stat { white-space: nowrap; }
-
-.hud-buttons {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-#btn-new, #overlay-btn {
-  background: var(--accent);
-  color: #1a1508;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-#btn-new:hover, #overlay-btn:hover { filter: brightness(1.1); }
-
-#btn-fullscreen {
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid #3a4260;
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 0.95rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-#btn-fullscreen:hover { filter: brightness(1.2); }
-
 #stage {
   position: relative;
   flex: 1;
   min-height: 0;
-  width: 100%;
   border: 3px solid #2a3145;
   border-radius: 8px;
   overflow: hidden;
@@ -116,7 +54,109 @@ html, body {
   background: #05070c;
 }
 
-#overlay {
+/* ---------- HUD (overlaid on the canvas, not in normal flow) ---------- */
+
+#hud {
+  --row: 40px; /* kept in sync with the maze's actual on-screen top row by JS */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0; /* left/width overridden inline to track the canvas's letterboxed rect */
+  height: var(--row);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--row) * 0.2);
+  background: rgba(11, 15, 26, 0.78);
+  backdrop-filter: blur(2px);
+  padding: 0 calc(var(--row) * 0.22);
+  font-size: calc(var(--row) * 0.34);
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none; /* let drags pass through the empty gaps between controls */
+}
+
+#hud > * { pointer-events: auto; }
+
+/* landscape: run down the left edge instead of across the top */
+#hud.hud-vertical {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  width: var(--row);
+  height: 0; /* top/height overridden inline to track the maze's left column */
+  padding: calc(var(--row) * 0.22) 0;
+  gap: calc(var(--row) * 0.22);
+}
+
+#hud.hud-vertical .stats { flex-direction: column; gap: 0.55em; }
+#hud.hud-vertical .hud-buttons { flex-direction: column; gap: 0.35em; }
+
+#hud h1 {
+  font-size: 1em;
+  margin: 0;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+
+.stats {
+  display: flex;
+  gap: 0.8em;
+  font-size: 0.88em;
+}
+
+.stat { white-space: nowrap; }
+
+.hud-buttons {
+  display: flex;
+  gap: 0.35em;
+}
+
+#btn-new, .modal-card button {
+  background: var(--accent);
+  color: #1a1508;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#btn-new {
+  border-radius: 0.3em;
+  padding: 0.3em 0.55em;
+  font-size: 0.8em;
+}
+
+.modal-card button {
+  padding: 8px 14px;
+  font-size: 1rem;
+}
+
+#btn-new:hover, .modal-card button:hover { filter: brightness(1.1); }
+
+#btn-fullscreen, #btn-help {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #3a4260;
+  border-radius: 0.3em;
+  padding: 0.25em 0.5em;
+  font-size: 0.85em;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#btn-fullscreen:hover, #btn-help:hover { filter: brightness(1.2); }
+
+@media (max-width: 480px) {
+  #hud h1 { display: none; }
+}
+
+#hud.hud-vertical h1 { display: none; }
+
+/* ---------- shared modal (game-state overlay + help panel) ---------- */
+
+.modal {
   position: absolute;
   inset: 0;
   background: rgba(5, 7, 12, 0.82);
@@ -126,25 +166,29 @@ html, body {
   z-index: 30;
 }
 
-#overlay.hidden { display: none; }
+.modal.hidden { display: none; }
 
-#overlay-card {
+.modal-card {
   text-align: center;
   padding: 24px 32px;
+  max-width: min(90%, 420px);
   background: var(--panel);
   border: 1px solid #3a4260;
   border-radius: 12px;
 }
 
-#overlay-title {
+.modal-card h2 {
   margin: 0 0 8px;
   font-size: 1.6rem;
 }
 
-#overlay-text {
-  margin: 0 0 16px;
+.modal-card p {
+  margin: 0 0 12px;
   color: #c7cce0;
+  font-size: 0.9rem;
 }
+
+.modal-card button { margin-top: 4px; }
 
 /* ---------- floating drag joystick ---------- */
 
@@ -172,12 +216,4 @@ html, body {
   border-radius: 50%;
   background: rgba(232, 179, 74, 0.55);
   border: 2px solid rgba(232, 179, 74, 0.8);
-}
-
-#hint {
-  max-width: 640px;
-  text-align: center;
-  color: #9aa2bd;
-  font-size: 0.85rem;
-  margin: 0;
 }
