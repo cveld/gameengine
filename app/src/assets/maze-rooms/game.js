@@ -209,6 +209,13 @@
     updateLabel();
   }
 
+  function setupOrientationHint() {
+    const hint = document.getElementById("orientation-hint");
+    document.getElementById("orientation-hint-close").addEventListener("click", () => {
+      hint.classList.add("dismissed");
+    });
+  }
+
   // ---------- room-graph (which rooms connect to which, and where) ----------
   function buildRoomGraph() {
     const n = RG_COLS * RG_ROWS;
@@ -926,7 +933,7 @@
       if (activePointerId !== null) return;
       if (gameOver || won) return;
       if (!overlay.classList.contains("hidden") || !helpOverlay.classList.contains("hidden")) return;
-      if (e.target.closest("#hud")) return;
+      if (e.target.closest("#hud") || e.target.closest("#orientation-hint")) return;
       activePointerId = e.pointerId;
       const rect = stage.getBoundingClientRect();
       originX = e.clientX - rect.left;
@@ -990,6 +997,7 @@
     setupFullscreen();
     setupJoystick();
     setupMute();
+    setupOrientationHint();
     await loadImages(SPRITE_NAMES);
     newLevel(0);
     setupHudSizing(); // after newLevel() so canvas.width/height reflect the real maze size

@@ -217,3 +217,45 @@ html, body {
   background: rgba(232, 179, 74, 0.55);
   border: 2px solid rgba(232, 179, 74, 0.8);
 }
+
+/* ---------- portrait-orientation hint ---------- */
+
+#orientation-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 25;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  background: rgba(23, 28, 43, 0.95);
+  border: 1px solid #3a4260;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  color: var(--text);
+  max-width: 88%;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+@media (orientation: portrait) {
+  #orientation-hint { display: flex; }
+}
+
+#orientation-hint.dismissed { display: none !important; }
+
+#orientation-hint button {
+  background: transparent;
+  border: 1px solid #3a4260;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#orientation-hint button:hover { filter: brightness(1.2); }
