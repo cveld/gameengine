@@ -1,0 +1,261 @@
+:root {
+  --bg: #0b0f1a;
+  --panel: #171c2b;
+  --accent: #e8b34a;
+  --text: #e9ecf5;
+}
+
+* { box-sizing: border-box; }
+
+.hidden { display: none; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+#game {
+  max-width: 1000px;
+  height: 100dvh;
+  margin: 0 auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+#game:fullscreen {
+  max-width: 100%;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+}
+
+#stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border: 3px solid #2a3145;
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+}
+
+#canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: #05070c;
+}
+
+/* ---------- HUD (overlaid on the canvas, not in normal flow) ---------- */
+
+#hud {
+  --row: 40px; /* kept in sync with the maze's actual on-screen top row by JS */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0; /* left/width overridden inline to track the canvas's letterboxed rect */
+  height: var(--row);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--row) * 0.2);
+  background: rgba(11, 15, 26, 0.78);
+  backdrop-filter: blur(2px);
+  padding: 0 calc(var(--row) * 0.22);
+  font-size: calc(var(--row) * 0.34);
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none; /* let drags pass through the empty gaps between controls */
+}
+
+#hud > * { pointer-events: auto; }
+
+/* landscape: run down the left edge instead of across the top */
+#hud.hud-vertical {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  width: var(--row);
+  height: 0; /* top/height overridden inline to track the maze's left column */
+  padding: calc(var(--row) * 0.22) 0;
+  gap: calc(var(--row) * 0.22);
+}
+
+#hud.hud-vertical .stats { flex-direction: column; gap: 0.55em; }
+#hud.hud-vertical .hud-buttons { flex-direction: column; gap: 0.35em; }
+
+#hud h1 {
+  font-size: 1em;
+  margin: 0;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+
+.stats {
+  display: flex;
+  gap: 0.8em;
+  font-size: 0.88em;
+}
+
+.stat { white-space: nowrap; }
+
+.hud-buttons {
+  display: flex;
+  gap: 0.35em;
+}
+
+#btn-new, .modal-card button {
+  background: var(--accent);
+  color: #1a1508;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#btn-new {
+  border-radius: 0.3em;
+  padding: 0.3em 0.55em;
+  font-size: 0.8em;
+}
+
+.modal-card button {
+  padding: 8px 14px;
+  font-size: 1rem;
+}
+
+#btn-new:hover, .modal-card button:hover { filter: brightness(1.1); }
+
+#btn-fullscreen, #btn-help, #btn-mute {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #3a4260;
+  border-radius: 0.3em;
+  padding: 0.25em 0.5em;
+  font-size: 0.85em;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#btn-fullscreen:hover, #btn-help:hover, #btn-mute:hover { filter: brightness(1.2); }
+
+@media (max-width: 480px) {
+  #hud h1 { display: none; }
+}
+
+#hud.hud-vertical h1 { display: none; }
+
+/* ---------- shared modal (game-state overlay + help panel) ---------- */
+
+.modal {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 7, 12, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+}
+
+.modal.hidden { display: none; }
+
+.modal-card {
+  text-align: center;
+  padding: 24px 32px;
+  max-width: min(90%, 420px);
+  background: var(--panel);
+  border: 1px solid #3a4260;
+  border-radius: 12px;
+}
+
+.modal-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.6rem;
+}
+
+.modal-card p {
+  margin: 0 0 12px;
+  color: #c7cce0;
+  font-size: 0.9rem;
+}
+
+.modal-card button { margin-top: 4px; }
+
+/* ---------- floating drag joystick ---------- */
+
+#joystick {
+  position: absolute;
+  width: 96px;
+  height: 96px;
+  margin-left: -48px;
+  margin-top: -48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  z-index: 15;
+  pointer-events: none;
+}
+
+#joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
+  border-radius: 50%;
+  background: rgba(232, 179, 74, 0.55);
+  border: 2px solid rgba(232, 179, 74, 0.8);
+}
+
+/* ---------- portrait-orientation hint ---------- */
+
+#orientation-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 25;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  background: rgba(23, 28, 43, 0.95);
+  border: 1px solid #3a4260;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  color: var(--text);
+  max-width: 88%;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+@media (orientation: portrait) {
+  #orientation-hint { display: flex; }
+}
+
+#orientation-hint.dismissed { display: none !important; }
+
+#orientation-hint button {
+  background: transparent;
+  border: 1px solid #3a4260;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#orientation-hint button:hover { filter: brightness(1.2); }
