@@ -13,6 +13,7 @@ import { HomeComponent } from "../home/home.component";
 import { MemoryComponent } from "../memory/memory.component";
 import { SimonComponent } from "../simon/simon.component";
 import { MazeComponent } from "../maze/maze.component";
+import { FlappyMuisComponent } from "../flappy-muis/flappy-muis.component";
 import { MazeRoomsComponent } from "../maze-rooms/maze-rooms.component";
 
 @NgModule({
@@ -28,6 +29,7 @@ import { MazeRoomsComponent } from "../maze-rooms/maze-rooms.component";
     MemoryComponent,
     SimonComponent,
     MazeComponent,
+    FlappyMuisComponent,
     MazeRoomsComponent
   ],
   imports: [
