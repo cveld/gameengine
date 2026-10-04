@@ -1,0 +1,15 @@
+name: Environment test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ccr-12461d4c-fj9zo3
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    environment: carlintveld
+    steps:
+      - name: Show environment
+        run: echo "Running in environment carlintveld on ref ${{ github.ref_name }}"
