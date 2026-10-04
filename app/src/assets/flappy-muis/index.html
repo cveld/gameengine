@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Flappy Muis</title>
+  <style>
+    :root { --accent: #f97316; --radius: 12px; --muted: #64748b; --white: #fff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
+    main.experience { max-width: 420px; margin: 0 auto; padding: 1rem; }
+    .stage { position: relative; touch-action: manipulation; user-select: none; }
+    canvas {
+      width: 100%; aspect-ratio: 2 / 3; display: block;
+      border-radius: var(--radius); box-shadow: 0 2px 8px rgba(0,0,0,.12);
+      background: #bae6fd; cursor: pointer;
+      touch-action: none; -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+    }
+    .cheats input, .cheats button { font-size: 16px; } /* iOS zoomt in op velden < 16px */
+    .btn { border: 0; border-radius: .4rem; padding: .3rem .7rem; background: #e2e8f0; cursor: pointer; }
+    .hud { display: flex; justify-content: space-between; margin: .75rem 0; font-weight: 700; }
+    .hud span { color: var(--muted); font-weight: 500; }
+    .cheats {
+      background: var(--white); border-radius: var(--radius);
+      padding: 1rem 1.25rem; margin-top: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    .cheats summary { font-weight: 700; cursor: pointer; }
+    .cheats label { display: flex; align-items: center; gap: .6rem; margin-top: .75rem; font-size: .95rem; }
+    .cheats input[type=range] { flex: 1; }
+    .cheats small { color: var(--muted); display: block; margin-top: .75rem; }
+    .badge { display:none; margin-left:.5rem; background:#ef4444; color:#fff; border-radius:.4rem; padding:.05rem .4rem; font-size:.7rem; }
+    .badge.on { display:inline; }
+    .highscores { background: var(--white); border-radius: var(--radius); padding: 1rem 1.25rem; margin-top: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .highscores h2 { font-size: 1rem; margin: 0 0 .75rem; }
+    .highscores ol { margin: 0; padding-left: 1.5rem; }
+    .highscores li { padding: .2rem 0; }
+    .score-form { display: none; gap: .5rem; margin-top: .75rem; }
+    .score-form.visible { display: flex; }
+    .score-form input { min-width: 0; flex: 1; font-size: 16px; padding: .4rem; }
+    .score-status { min-height: 1.25rem; color: var(--muted); font-size: .8rem; margin-top: .5rem; }
+  </style>
+</head>
+<body>
+  <main class="experience">
+    <div class="hud">
+      <div>Score: <b id="score">0</b></div>
+      <div><span>Beste:</span> <b id="best">0</b><span class="badge" id="cheatBadge">CHEATS</span></div>
+    </div>
+    <div class="stage"><canvas id="c" width="400" height="600"></canvas></div>
+    <p style="text-align:center;color:var(--muted);margin-top:.75rem;font-size:.9rem">
+      Tik, klik of druk op spatie om te vliegen.
+    </p>
+
+    <section class="highscores">
+      <h2>🏆 Highscores</h2>
+      <ol id="highscores"><li>Scores laden…</li></ol>
+      <form id="scoreForm" class="score-form">
+        <input id="playerName" maxlength="24" required placeholder="Jouw naam" autocomplete="nickname" />
+        <button class="btn" type="submit">Opslaan</button>
+      </form>
+      <div id="scoreStatus" class="score-status"></div>
+    </section>
+    <p style="text-align:center;margin-top:.5rem;font-size:.85rem">
+      Nagemaakt naar het origineel:
+      <a href="https://speelproefdiervrij.nl/gamechanger" target="_blank" rel="noopener">Gamechanger van Proefdiervrij</a>
+    </p>
+
+    <details class="cheats" open>
+      <summary>🕹️ Cheat-paneel</summary>
+      <label><input type="checkbox" id="chInvincible" /> Onsterfelijk (botsen kan niet)</label>
+      <label><input type="checkbox" id="chAuto" /> Autopilot (muis vliegt zelf)</label>
+      <label><input type="checkbox" id="chWide" /> Extra brede gaten</label>
+      <label><input type="checkbox" id="chFloat" /> Zweven (geen zwaartekracht)</label>
+      <label>Spelsnelheid <input type="range" id="chSpeed" min="0.5" max="2" step="0.1" value="1" /> <b id="chSpeedVal">1.0×</b></label>
+      <label>Score instellen <input type="number" id="chScore" min="0" max="9999" value="0" style="width:5rem" />
+        <button class="btn secondary" id="chScoreBtn" type="button">Zet</button></label>
+      <small>Gebruik van cheats telt niet mee voor je beste score.</small>
+    </details>
+  </main>
+
+<script>
+(() => {
+  const W = 400, H = 600, GROUND = 540;
+  const SPACING = 260, MAX_SHIFT = 110; // px tussen palen / max. hoogteverschil tussen gaten
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  const $ = id => document.getElementById(id);
+  const cheat = {
+    invincible: $('chInvincible'), auto: $('chAuto'), wide: $('chWide'),
+    float: $('chFloat'), speed: $('chSpeed')
+  };
+  let best = 0;
+  try { best = +localStorage.getItem('flappyMuisBest') || 0; } catch (e) {}
+  $('best').textContent = best;
+
+  const GAP = () => cheat.wide.checked ? 220 : 140;
+  const highScoreApi = 'https://func-gameengine-highscores.azurewebsites.net/api/highscores';
+  let mouse, pipes, score, state, frame, cheated, pendingScore = null;
+
+  function escapeHtml(value) {
+    const element = document.createElement('span');
+    element.textContent = value;
+    return element.innerHTML;
+  }
+
+  async function loadHighScores() {
+    try {
+      const response = await fetch(highScoreApi);
+      if (!response.ok) throw new Error('Highscores laden mislukt');
+      const scores = await response.json();
+      $('highscores').innerHTML = scores.length
+        ? scores.map(item => `<li><strong>${escapeHtml(item.name)}</strong> — ${item.score}</li>`).join('')
+        : '<li>Nog geen scores. Jij kunt de eerste zijn!</li>';
+    } catch (e) {
+      $('highscores').innerHTML = '<li>Highscores zijn tijdelijk niet beschikbaar.</li>';
+    }
+  }
+
+  function reset() {
+    mouse = { x: 90, y: 280, vy: 0, r: 14 };
+    pipes = []; score = 0; frame = 0; cheated = false;
+    $('score').textContent = 0;
+    state = 'ready';
+  }
+  function flap() {
+    if (state === 'dead') { reset(); return; }
+    if (state === 'ready') state = 'play';
+    mouse.vy = -7.2;
+  }
+  function usedCheats() {
+    return cheat.invincible.checked || cheat.auto.checked || cheat.wide.checked ||
+           cheat.float.checked || +cheat.speed.value !== 1;
+  }
+  function die() {
+    state = 'dead';
+    if (!cheated && score > best) {
+      best = score; $('best').textContent = best;
+      try { localStorage.setItem('flappyMuisBest', best); } catch (e) {}
+    }
+    if (!cheated && score > 0) {
+      pendingScore = score;
+      $('scoreForm').classList.add('visible');
+      $('scoreStatus').textContent = `Score ${score}: vul je naam in voor de ranglijst.`;
+      try { $('playerName').value = localStorage.getItem('flappyMuisName') || ''; } catch (e) {}
+    }
+  }
+  function setScore(n) { score = n; $('score').textContent = n; cheated = true; }
+
+  function autopilot() {
+    // Mik op het midden van het eerstvolgende gat.
+    const next = pipes.find(p => p.x + 52 > mouse.x - mouse.r);
+    const target = next ? next.gapY + GAP() / 2 : 280;
+    if (mouse.y > target + 8 && mouse.vy >= 0) mouse.vy = -7.2;
+  }
+
+  function update() {
+    const speed = +cheat.speed.value;
+    if (usedCheats()) { cheated = true; $('cheatBadge').classList.add('on'); }
+    else $('cheatBadge').classList.remove('on');
+    frame++;
+    if (state !== 'play') return;
+
+    if (cheat.auto.checked) autopilot();
+    mouse.vy += cheat.float.checked ? 0 : 0.42 * speed * speed;
+    if (cheat.float.checked) mouse.vy *= 0.9;
+    mouse.y += mouse.vy * speed;
+
+    const last = pipes[pipes.length - 1];
+    if (!last || last.x <= W - SPACING) {
+      const g = GAP();
+      const lo = 60, hi = GROUND - g - 60;
+      // Houd het gat haalbaar t.o.v. het vorige gat (max. hoogteverschil).
+      const from = last ? Math.max(lo, last.gapY - MAX_SHIFT) : lo;
+      const to = last ? Math.min(hi, last.gapY + MAX_SHIFT) : hi;
+      pipes.push({ x: W, gapY: from + Math.random() * (to - from), passed: false });
+    }
+    for (const p of pipes) {
+      p.x -= 2.6 * speed;
+      if (!p.passed && p.x + 52 < mouse.x) {
+        p.passed = true; score++; $('score').textContent = score;
+      }
+    }
+    pipes = pipes.filter(p => p.x > -60);
+
+    let hit = false;
+    if (mouse.y + mouse.r > GROUND) { hit = true; mouse.y = GROUND - mouse.r; }
+    if (mouse.y - mouse.r < 0) { mouse.y = mouse.r; mouse.vy = 0; }
+    for (const p of pipes) {
+      const inX = mouse.x + mouse.r > p.x && mouse.x - mouse.r < p.x + 52;
+      if (inX && (mouse.y - mouse.r < p.gapY || mouse.y + mouse.r > p.gapY + GAP())) hit = true;
+    }
+    if (hit) {
+      if (cheat.invincible.checked) {
+        if (mouse.y + mouse.r >= GROUND) mouse.vy = -7.2;
+      } else die();
+    }
+  }
+
+  function draw() {
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#7dd3fc'); sky.addColorStop(1, '#e0f2fe');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
+    for (const p of pipes) {
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(p.x, 0, 52, p.gapY);
+      ctx.fillRect(p.x, p.gapY + GAP(), 52, GROUND - p.gapY - GAP());
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(p.x - 4, p.gapY - 18, 60, 18);
+      ctx.fillRect(p.x - 4, p.gapY + GAP(), 60, 18);
+    }
+    ctx.fillStyle = '#a16207'; ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = '#65a30d'; ctx.fillRect(0, GROUND, W, 10);
+
+    ctx.save();
+    ctx.translate(mouse.x, mouse.y);
+    ctx.rotate(Math.max(-0.5, Math.min(1, mouse.vy / 12)));
+    ctx.font = '34px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.scale(-1, 1); // muis kijkt naar rechts
+    ctx.fillText('🐭', 0, 2);
+    ctx.restore();
+
+    ctx.textAlign = 'center'; ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 44px system-ui'; ctx.fillText(score, W / 2, 70);
+    ctx.font = 'bold 22px system-ui';
+    if (state === 'ready') ctx.fillText('Tik om te starten', W / 2, 330);
+    if (state === 'dead') {
+      ctx.fillText('Game over — tik om opnieuw', W / 2, 300);
+      if (cheated) { ctx.font = '14px system-ui'; ctx.fillText('(cheats gebruikt: geen record)', W / 2, 328); }
+    }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); flap(); });
+  // iOS Safari: voorkom dubbel-tik-zoom en pinch-zoom op het speelveld
+  cv.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  let lastEnd = 0;
+  document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - lastEnd < 350 && e.target === cv) e.preventDefault();
+    lastEnd = now;
+  }, { passive: false });
+  addEventListener('keydown', e => {
+    if (e.code === 'Space' && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) {
+      e.preventDefault(); flap();
+    }
+  });
+  cheat.speed.addEventListener('input', () => {
+    $('chSpeedVal').textContent = (+cheat.speed.value).toFixed(1) + '×';
+  });
+  $('chScoreBtn').addEventListener('click', () => {
+    setScore(Math.max(0, Math.min(9999, +$('chScore').value || 0)));
+  });
+
+  $('scoreForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const name = $('playerName').value.trim();
+    if (!name || pendingScore === null) return;
+    $('scoreStatus').textContent = 'Score opslaan…';
+    try {
+      const response = await fetch(highScoreApi, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, score: pendingScore })
+      });
+      if (!response.ok) throw new Error('Score opslaan mislukt');
+      try { localStorage.setItem('flappyMuisName', name); } catch (e) {}
+      pendingScore = null;
+      $('scoreForm').classList.remove('visible');
+      $('scoreStatus').textContent = 'Score opgeslagen!';
+      await loadHighScores();
+    } catch (e) {
+      $('scoreStatus').textContent = 'Opslaan mislukt. Probeer het later opnieuw.';
+    }
+  });
+
+  reset(); loadHighScores(); loop();
+})();
+</script>
+</body>
+</html>
