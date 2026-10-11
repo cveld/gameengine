@@ -32,6 +32,8 @@ export class CoopComponent implements OnInit, OnDestroy {
   state: ICoopState = newState({ h: '', v: '' }, 'waiting');
   peerName?: string;
   roomFull = false;
+  // coarse pointer = phone/tablet: show touch hints instead of keyboard keys
+  readonly isTouch = window.matchMedia?.('(pointer: coarse)').matches ?? false;
 
   private subs = new Subscription();
   private raf?: number;
@@ -100,6 +102,20 @@ export class CoopComponent implements OnInit, OnDestroy {
   restart() {
     if (this.isHost) this.restartAsHost();
     else this.coop.sendRestart();
+  }
+
+  // Pointer handlers for the on-screen buttons. Capturing the pointer keeps
+  // the press alive when a thumb slides off the button; pointercancel (e.g. a
+  // system gesture) always releases so the ship never keeps drifting.
+  press(e: PointerEvent, dir: number) {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    this.setDir(dir);
+  }
+
+  release(e: PointerEvent) {
+    e.preventDefault();
+    this.setDir(0);
   }
 
   // On-screen buttons (touch) call this; keyboard goes through setDir as well.

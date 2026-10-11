@@ -26,24 +26,32 @@
       </div>
     </div>
   </div>
+</div>
 
-  <div *ngIf="joined" class="coop-wrap">
-    <p class="mb-2">
-      Jij bestuurt: <strong>{{ isHost ? 'links / rechts (← → of A D)' : 'omhoog / omlaag (↑ ↓ of W S)' }}</strong>
-      <span *ngIf="peerName"> &middot; samen met <strong>{{ peerName }}</strong></span>
-    </p>
-    <canvas #canvas width="480" height="640" class="coop-canvas"></canvas>
-
-    <div class="coop-pad mt-2">
-      <ng-container *ngIf="isHost">
-        <button class="btn btn-secondary btn-lg" (pointerdown)="setDir(-1)" (pointerup)="setDir(0)" (pointerleave)="setDir(0)">◀</button>
-        <button class="btn btn-secondary btn-lg" (pointerdown)="setDir(1)" (pointerup)="setDir(0)" (pointerleave)="setDir(0)">▶</button>
-      </ng-container>
-      <ng-container *ngIf="!isHost">
-        <button class="btn btn-secondary btn-lg" (pointerdown)="setDir(-1)" (pointerup)="setDir(0)" (pointerleave)="setDir(0)">▲</button>
-        <button class="btn btn-secondary btn-lg" (pointerdown)="setDir(1)" (pointerup)="setDir(0)" (pointerleave)="setDir(0)">▼</button>
-      </ng-container>
-      <button *ngIf="state.phase === 'over'" class="btn btn-primary btn-lg" (click)="restart()">Opnieuw</button>
+<div *ngIf="joined" class="coop-screen">
+  <div class="coop-bar">
+    <div class="coop-hint">
+      <strong>{{ isHost ? 'Jij: links / rechts' : 'Jij: omhoog / omlaag' }}</strong>
+      <span *ngIf="peerName"> &middot; met {{ peerName }}</span>
+      <small *ngIf="!isTouch" class="d-block text-muted">
+        Toetsen: {{ isHost ? '← → of A D' : '↑ ↓ of W S' }}
+      </small>
     </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-light btn-sm" (click)="leaveRoom()">Verlaten</button>
+      <a routerLink="/" class="btn btn-outline-light btn-sm">Start</a>
+    </div>
+  </div>
+
+  <div class="coop-stage">
+    <canvas #canvas width="480" height="640" class="coop-canvas"></canvas>
+  </div>
+
+  <div class="coop-controls">
+    <ng-container *ngIf="state.phase !== 'over'">
+      <button class="coop-btn" (pointerdown)="press($event, -1)" (pointerup)="release($event)" (pointercancel)="release($event)" (contextmenu)="$event.preventDefault()">{{ isHost ? '◀' : '▲' }}</button>
+      <button class="coop-btn" (pointerdown)="press($event, 1)" (pointerup)="release($event)" (pointercancel)="release($event)" (contextmenu)="$event.preventDefault()">{{ isHost ? '▶' : '▼' }}</button>
+    </ng-container>
+    <button *ngIf="state.phase === 'over'" class="coop-btn coop-btn-restart" (click)="restart()">Opnieuw spelen</button>
   </div>
 </div>
