@@ -1,0 +1,21 @@
+.coop-canvas {
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 480 / 640;
+  border-radius: 12px;
+  background: #0b1026;
+  touch-action: none;
+  display: block;
+}
+
+.coop-pad {
+  display: flex;
+  gap: 12px;
+  max-width: 480px;
+  touch-action: none;
+
+  button:not(.btn-primary) {
+    flex: 1;
+    user-select: none;
+  }
+}

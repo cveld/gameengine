@@ -1,0 +1,49 @@
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Tandem Ruimteschip</h1>
+    <div class="d-flex gap-2 align-items-center">
+      <button *ngIf="joined" class="btn btn-outline-secondary btn-sm" (click)="leaveRoom()">Kamer verlaten</button>
+      <a routerLink="/" class="btn btn-outline-secondary btn-sm">Terug naar start</a>
+    </div>
+  </div>
+
+  <div *ngIf="!joined" class="card mb-4" style="max-width: 420px;">
+    <div class="card-body">
+      <p class="text-muted">
+        Twee spelers, één schip. De ene speler stuurt links/rechts, de ander omhoog/omlaag.
+        Vang samen sterren en ontwijk de rotsen. Spreek een kamercode af en doe mee!
+      </p>
+      <div *ngIf="roomFull" class="alert alert-warning">Deze kamer zit al vol. Kies een andere code.</div>
+      <label for="coopName" class="form-label">Jouw naam</label>
+      <input id="coopName" class="form-control mb-2" [(ngModel)]="name" placeholder="Naam">
+      <div *ngIf="recentProfiles.length" class="d-flex flex-wrap gap-1 mb-2">
+        <button *ngFor="let p of recentProfiles" type="button" class="btn btn-sm btn-outline-secondary" (click)="name = p">{{ p }}</button>
+      </div>
+      <label for="coopRoom" class="form-label">Kamercode</label>
+      <div class="input-group">
+        <input id="coopRoom" class="form-control text-uppercase" [(ngModel)]="roomCode" (keyup.enter)="join()" maxlength="8">
+        <button class="btn btn-primary" (click)="join()" [disabled]="!name.trim() || !roomCode.trim()">Meedoen</button>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="joined" class="coop-wrap">
+    <p class="mb-2">
+      Jij bestuurt: <strong>{{ isHost ? 'links / rechts (← → of A D)' : 'omhoog / omlaag (↑ ↓ of W S)' }}</strong>
+      <span *ngIf="peerName"> &middot; samen met <strong>{{ peerName }}</strong></span>
+    </p>
+    <canvas #canvas width="480" height="640" class="coop-canvas"></canvas>
+
+    <div class="coop-pad mt-2">
+      <ng-container *ngIf="isHost">
+        <button class="btn btn-secondary btn-lg" (pointerdown)="setDir(-1)" (pointerup)="setDir(0)" (pointerleave)="setDir(0)">◀</button>
+        <button class="btn btn-secondary btn-lg" (pointerdown)="setDir(1)" (pointerup)="setDir(0)" (pointerleave)="setDir(0)">▶</button>
+      </ng-container>
+      <ng-container *ngIf="!isHost">
+        <button class="btn btn-secondary btn-lg" (pointerdown)="setDir(-1)" (pointerup)="setDir(0)" (pointerleave)="setDir(0)">▲</button>
+        <button class="btn btn-secondary btn-lg" (pointerdown)="setDir(1)" (pointerup)="setDir(0)" (pointerleave)="setDir(0)">▼</button>
+      </ng-container>
+      <button *ngIf="state.phase === 'over'" class="btn btn-primary btn-lg" (click)="restart()">Opnieuw</button>
+    </div>
+  </div>
+</div>
