@@ -2,7 +2,7 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Tandem Ruimteschip</h1>
     <div class="d-flex gap-2 align-items-center">
-      <button *ngIf="joined" class="btn btn-outline-secondary btn-sm" (click)="leaveRoom()">Kamer verlaten</button>
+      <button *ngIf="joined" class="btn btn-outline-secondary btn-sm" (click)="exitRoom()">Kamer verlaten</button>
       <a routerLink="/" class="btn btn-outline-secondary btn-sm">Terug naar start</a>
     </div>
   </div>
@@ -41,7 +41,7 @@
       <button class="btn btn-sm" [class.btn-success]="inviteCopied" [class.btn-outline-light]="!inviteCopied" (click)="copyInvite()">
         {{ inviteCopied ? 'Link gekopieerd!' : 'Uitnodigen' }}
       </button>
-      <button class="btn btn-outline-light btn-sm" (click)="leaveRoom()">Verlaten</button>
+      <button class="btn btn-outline-light btn-sm" (click)="exitRoom()">Verlaten</button>
       <a routerLink="/" class="btn btn-outline-light btn-sm">Start</a>
     </div>
   </div>

@@ -1,4 +1,5 @@
 import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { GameHistoryService } from '../services/history/game-history.service';
 import { ProfileService } from '../services/profile/profile.service';
@@ -20,7 +21,13 @@ const BROADCAST_INTERVAL_MS = 100;
 })
 export class CoopComponent implements OnInit, OnDestroy {
 
-  constructor(public coop: CoopService, private profile: ProfileService, private history: GameHistoryService) { }
+  constructor(
+    public coop: CoopService,
+    private profile: ProfileService,
+    private history: GameHistoryService,
+    private router: Router,
+    private route: ActivatedRoute,
+  ) { }
 
   @ViewChild('canvas') canvasRef?: ElementRef<HTMLCanvasElement>;
 
@@ -47,18 +54,26 @@ export class CoopComponent implements OnInit, OnDestroy {
     const active = this.profile.getActiveProfile();
     if (active) this.name = active;
 
-    // Invite link: /coop?room=ABCD prefills the room code, and joins right
-    // away when we already know the player's name.
-    const invited = new URLSearchParams(window.location.search).get('room')?.trim().toUpperCase();
-    if (invited) {
-      this.roomCode = invited.substring(0, 8);
-      if (this.name.trim()) setTimeout(() => this.join());
-    }
+    // The room lives in the URL (/coop?room=ABCD): that makes invite links
+    // work, and the browser's back button leaves the room and returns to this
+    // lobby (instead of the tile overview) while forward re-joins it.
+    this.subs.add(this.route.queryParamMap.subscribe(params => {
+      const room = params.get('room')?.trim().toUpperCase().substring(0, 8);
+      if (room && !this.joined) {
+        this.roomCode = room;
+        if (this.name.trim()) this.join();
+      } else if (!room && this.joined) {
+        this.leaveRoom();
+      }
+    }));
 
     this.subs.add(this.coop.peer$.subscribe(peer => this.onPeerChanged(peer?.name)));
     this.subs.add(this.coop.roomFull$.subscribe(full => {
       this.roomFull = full;
-      if (full) this.leaveRoom();
+      if (full) {
+        this.leaveRoom();
+        this.setRoomInUrl(undefined, true);
+      }
     }));
     this.subs.add(this.coop.guestInput$.subscribe(dir => {
       // The guest is always the vertical player.
@@ -96,8 +111,20 @@ export class CoopComponent implements OnInit, OnDestroy {
     this.peerName = undefined;
     this.state = newState(this.names(), 'waiting');
     this.coop.join(room, name);
+    this.setRoomInUrl(room);
     // the canvas only exists once the template has rendered the joined view
     setTimeout(() => this.startLoop());
+  }
+
+  // Back to the lobby via history, so the back button then leaves the game page.
+  exitRoom() {
+    this.leaveRoom();
+    this.setRoomInUrl(undefined);
+  }
+
+  private setRoomInUrl(room: string | undefined, replaceUrl = false) {
+    if (this.route.snapshot.queryParamMap.get('room')?.toUpperCase() === room) return;
+    this.router.navigate([], { relativeTo: this.route, queryParams: { room: room ?? null }, replaceUrl });
   }
 
   leaveRoom() {
