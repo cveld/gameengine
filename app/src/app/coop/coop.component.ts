@@ -217,7 +217,16 @@ export class CoopComponent implements OnInit, OnDestroy {
 
   // ---- input ----
 
+  // Steering keys must never swallow typing (the name/room inputs live on the
+  // same page), so ignore them unless we're in a game and not in a text field.
+  private isSteeringContext(e: KeyboardEvent): boolean {
+    if (!this.joined) return false;
+    const t = e.target as HTMLElement | null;
+    return !(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable));
+  }
+
   private onKeyDown = (e: KeyboardEvent) => {
+    if (!this.isSteeringContext(e)) return;
     const dir = this.keyToDir(e.key);
     if (dir === undefined) return;
     e.preventDefault();
@@ -225,6 +234,7 @@ export class CoopComponent implements OnInit, OnDestroy {
   };
 
   private onKeyUp = (e: KeyboardEvent) => {
+    if (!this.joined) return;
     const dir = this.keyToDir(e.key);
     if (dir === undefined) return;
     // only stop if the released key matches the current direction
