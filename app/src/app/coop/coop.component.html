@@ -38,6 +38,9 @@
       </small>
     </div>
     <div class="d-flex gap-2">
+      <button class="btn btn-sm" [class.btn-success]="inviteCopied" [class.btn-outline-light]="!inviteCopied" (click)="copyInvite()">
+        {{ inviteCopied ? 'Link gekopieerd!' : 'Uitnodigen' }}
+      </button>
       <button class="btn btn-outline-light btn-sm" (click)="leaveRoom()">Verlaten</button>
       <a routerLink="/" class="btn btn-outline-light btn-sm">Start</a>
     </div>

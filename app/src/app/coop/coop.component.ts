@@ -47,6 +47,14 @@ export class CoopComponent implements OnInit, OnDestroy {
     const active = this.profile.getActiveProfile();
     if (active) this.name = active;
 
+    // Invite link: /coop?room=ABCD prefills the room code, and joins right
+    // away when we already know the player's name.
+    const invited = new URLSearchParams(window.location.search).get('room')?.trim().toUpperCase();
+    if (invited) {
+      this.roomCode = invited.substring(0, 8);
+      if (this.name.trim()) setTimeout(() => this.join());
+    }
+
     this.subs.add(this.coop.peer$.subscribe(peer => this.onPeerChanged(peer?.name)));
     this.subs.add(this.coop.roomFull$.subscribe(full => {
       this.roomFull = full;
@@ -66,6 +74,7 @@ export class CoopComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    window.clearTimeout(this.inviteTimer);
     this.leaveRoom();
     this.subs.unsubscribe();
     window.removeEventListener('keydown', this.onKeyDown);
@@ -97,6 +106,33 @@ export class CoopComponent implements OnInit, OnDestroy {
     this.joined = false;
     this.peerName = undefined;
     this.myDir = 0;
+  }
+
+  inviteCopied = false;
+  private inviteTimer?: number;
+
+  get inviteLink(): string {
+    return `${window.location.origin}/coop?room=${encodeURIComponent(this.coop.room ?? this.roomCode)}`;
+  }
+
+  async copyInvite() {
+    const link = this.inviteLink;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      // clipboard API unavailable (e.g. insecure context): fall back to a hidden textarea
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    this.inviteCopied = true;
+    window.clearTimeout(this.inviteTimer);
+    this.inviteTimer = window.setTimeout(() => this.inviteCopied = false, 2000);
   }
 
   restart() {
