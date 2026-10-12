@@ -1,4 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
+import * as signalR from '@microsoft/signalr';
 import { Guid } from 'guid-typescript';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { SignalrService } from '../services/signalr/SignalrService';
@@ -28,6 +29,7 @@ export class CoopService implements OnDestroy {
   restartRequested$ = new Subject<void>();
 
   private others = new Map<string, ICoopPeer>();
+  private helloTimer?: number;
 
   constructor(private signalr: SignalrService) {
     this.signalr.addHandler<ICoopPeer>(CoopOps.announce, m => this.onAnnounce(m.gameid, m.payload));
@@ -47,6 +49,14 @@ export class CoopService implements OnDestroy {
     });
     this.signalr.addHandler<undefined>(CoopOps.restart, m => {
       if (this.inRoom(m.gameid) && m.connectionid !== this.clientId) this.restartRequested$.next();
+    });
+
+    // Messages are broadcast to whoever is connected at that moment, so a
+    // "who's here?" sent before our own SignalR connection is up is never
+    // answered. Say hello whenever we (re)connect, and keep asking until we
+    // have found our partner.
+    this.signalr.state$.subscribe(state => {
+      if (state === signalR.HubConnectionState.Connected && this.room) this.hello();
     });
 
     window.addEventListener('beforeunload', this.leaveOnUnload);
@@ -73,11 +83,21 @@ export class CoopService implements OnDestroy {
     this.others.clear();
     this.peer$.next(undefined);
     this.roomFull$.next(false);
+    this.hello();
+    window.clearInterval(this.helloTimer);
+    this.helloTimer = window.setInterval(() => {
+      if (this.room && !this.peer$.value) this.hello();
+    }, 2000);
+  }
+
+  private hello() {
+    if (this.signalr.state$.value !== signalR.HubConnectionState.Connected) return;
     this.announce();
     this.send(CoopOps.query, undefined);
   }
 
   leave() {
+    window.clearInterval(this.helloTimer);
     if (!this.room) return;
     this.send(CoopOps.leave, { clientId: this.clientId });
     this.room = undefined;
