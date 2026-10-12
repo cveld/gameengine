@@ -30,6 +30,11 @@ export class CoopService implements OnDestroy {
 
   private others = new Map<string, ICoopPeer>();
   private helloTimer?: number;
+  private helloTicks = 0;
+  private peerLastSeen = 0;
+  // The partner pings every few seconds; silence for this long means their tab
+  // was closed or backgrounded (a "leave" can't be sent in that case).
+  private static readonly PEER_TIMEOUT_MS = 15000;
 
   constructor(private signalr: SignalrService) {
     this.signalr.addHandler<ICoopPeer>(CoopOps.announce, m => this.onAnnounce(m.gameid, m.payload));
@@ -39,11 +44,13 @@ export class CoopService implements OnDestroy {
     this.signalr.addHandler<{ clientId: string }>(CoopOps.leave, m => this.onLeave(m.gameid, m.payload?.clientId));
     this.signalr.addHandler<{ clientId: string; dir: number }>(CoopOps.input, m => {
       if (this.inRoom(m.gameid) && m.payload && m.payload.clientId === this.peer$.value?.clientId) {
+        this.peerLastSeen = Date.now();
         this.guestInput$.next(m.payload.dir);
       }
     });
     this.signalr.addHandler<ICoopState>(CoopOps.state, m => {
       if (this.inRoom(m.gameid) && m.payload && m.connectionid === this.peer$.value?.clientId && !this.isHost) {
+        this.peerLastSeen = Date.now();
         this.remoteState$.next(m.payload);
       }
     });
@@ -59,13 +66,21 @@ export class CoopService implements OnDestroy {
       if (state === signalR.HubConnectionState.Connected && this.room) this.hello();
     });
 
+    document.addEventListener('visibilitychange', this.onVisible);
     window.addEventListener('beforeunload', this.leaveOnUnload);
   }
+
+  // Back from another app/tab: our partner may have dropped us meanwhile, so
+  // announce again straight away.
+  private onVisible = () => {
+    if (document.visibilityState === 'visible' && this.room) this.hello();
+  };
 
   private leaveOnUnload = () => this.leave();
 
   ngOnDestroy(): void {
     this.leave();
+    document.removeEventListener('visibilitychange', this.onVisible);
     window.removeEventListener('beforeunload', this.leaveOnUnload);
   }
 
@@ -85,9 +100,28 @@ export class CoopService implements OnDestroy {
     this.roomFull$.next(false);
     this.hello();
     window.clearInterval(this.helloTimer);
-    this.helloTimer = window.setInterval(() => {
-      if (this.room && !this.peer$.value) this.hello();
-    }, 2000);
+    this.helloTicks = 0;
+    this.helloTimer = window.setInterval(() => this.tick(), 2000);
+  }
+
+  // Every 2s: look for a partner if we have none; otherwise ping them every
+  // other tick and drop them when we haven't heard anything for a while.
+  private tick() {
+    if (!this.room) return;
+    const peer = this.peer$.value;
+    if (!peer) {
+      this.hello();
+      return;
+    }
+    if (Date.now() - this.peerLastSeen > CoopService.PEER_TIMEOUT_MS) {
+      this.others.delete(peer.clientId);
+      this.peer$.next(undefined);
+      this.hello();
+      return;
+    }
+    if (++this.helloTicks % 2 === 0 && this.signalr.state$.value === signalR.HubConnectionState.Connected) {
+      this.announce();
+    }
   }
 
   private hello() {
@@ -127,8 +161,10 @@ export class CoopService implements OnDestroy {
 
   private onAnnounce(room?: string, entry?: ICoopPeer) {
     if (!entry || !this.inRoom(room) || entry.clientId === this.clientId) return;
+    if (entry.clientId === this.peer$.value?.clientId) this.peerLastSeen = Date.now();
     this.others.set(entry.clientId, entry);
     if (!this.peer$.value) {
+      this.peerLastSeen = Date.now();
       this.peer$.next(entry);
       this.announce(); // make sure the newcomer learns about us
     }
