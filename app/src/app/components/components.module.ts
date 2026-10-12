@@ -15,6 +15,7 @@ import { SimonComponent } from "../simon/simon.component";
 import { MazeComponent } from "../maze/maze.component";
 import { FlappyMuisComponent } from "../flappy-muis/flappy-muis.component";
 import { MazeRoomsComponent } from "../maze-rooms/maze-rooms.component";
+import { CoopComponent } from "../coop/coop.component";
 
 @NgModule({
   declarations: [
@@ -30,7 +31,8 @@ import { MazeRoomsComponent } from "../maze-rooms/maze-rooms.component";
     SimonComponent,
     MazeComponent,
     FlappyMuisComponent,
-    MazeRoomsComponent
+    MazeRoomsComponent,
+    CoopComponent
   ],
   imports: [
     AppRoutingModule,

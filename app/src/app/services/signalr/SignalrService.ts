@@ -35,16 +35,45 @@ export class SignalrService implements OnDestroy {
       this.logLine(`Disconnected: ${message}`);
       this.lastError$.next(message);
       this.state$.next(this.connection.state);
+      // automatic reconnect gives up after a few attempts (e.g. a phone tab in
+      // the background); keep trying so the connection always comes back
+      this.scheduleRestart();
     });
+
+    // Coming back to the tab or regaining network: reconnect right away
+    // instead of waiting for the next retry.
+    document.addEventListener('visibilitychange', this.ensureConnected);
+    window.addEventListener('online', this.ensureConnected);
 
     this.start();
   }
 
   ngOnDestroy(): void {
+    document.removeEventListener('visibilitychange', this.ensureConnected);
+    window.removeEventListener('online', this.ensureConnected);
+    window.clearTimeout(this.restartTimer);
     this.connection.stop();
   }
 
+  private restartTimer?: number;
+
+  private ensureConnected = () => {
+    if (document.visibilityState === 'hidden') return;
+    if (this.connection.state === signalR.HubConnectionState.Disconnected) {
+      window.clearTimeout(this.restartTimer);
+      this.start();
+    }
+  };
+
+  private scheduleRestart() {
+    window.clearTimeout(this.restartTimer);
+    this.restartTimer = window.setTimeout(() => this.ensureConnected(), 3000);
+  }
+
   start() {
+    if (this.connection.state !== signalR.HubConnectionState.Disconnected) {
+      return Promise.resolve();
+    }
     this.logLine('Connecting...');
     this.state$.next(this.connection.state);
     return this.connection.start()
@@ -58,6 +87,7 @@ export class SignalrService implements OnDestroy {
         this.logLine(`Failed to connect: ${message}`);
         this.lastError$.next(message);
         this.state$.next(this.connection.state);
+        this.scheduleRestart();
       });
   }
 

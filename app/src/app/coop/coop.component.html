@@ -1,0 +1,60 @@
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Tandem Ruimteschip</h1>
+    <div class="d-flex gap-2 align-items-center">
+      <button *ngIf="joined" class="btn btn-outline-secondary btn-sm" (click)="exitRoom()">Kamer verlaten</button>
+      <a routerLink="/" class="btn btn-outline-secondary btn-sm">Terug naar start</a>
+    </div>
+  </div>
+
+  <div *ngIf="!joined" class="card mb-4" style="max-width: 420px;">
+    <div class="card-body">
+      <p class="text-muted">
+        Twee spelers, één schip. De ene speler stuurt links/rechts, de ander omhoog/omlaag.
+        Vang samen sterren en ontwijk de rotsen. Spreek een kamercode af en doe mee!
+      </p>
+      <div *ngIf="roomFull" class="alert alert-warning">Deze kamer zit al vol. Kies een andere code.</div>
+      <label for="coopName" class="form-label">Jouw naam</label>
+      <input id="coopName" class="form-control mb-2" [(ngModel)]="name" placeholder="Naam">
+      <div *ngIf="recentProfiles.length" class="d-flex flex-wrap gap-1 mb-2">
+        <button *ngFor="let p of recentProfiles" type="button" class="btn btn-sm btn-outline-secondary" (click)="name = p">{{ p }}</button>
+      </div>
+      <label for="coopRoom" class="form-label">Kamercode</label>
+      <div class="input-group">
+        <input id="coopRoom" class="form-control text-uppercase" [(ngModel)]="roomCode" (keyup.enter)="join()" maxlength="8">
+        <button class="btn btn-primary" (click)="join()" [disabled]="!name.trim() || !roomCode.trim()">Meedoen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="joined" class="coop-screen">
+  <div class="coop-bar">
+    <div class="coop-hint">
+      <strong>{{ isHost ? 'Jij: links / rechts' : 'Jij: omhoog / omlaag' }}</strong>
+      <span *ngIf="peerName"> &middot; met {{ peerName }}</span>
+      <small *ngIf="!isTouch" class="d-block text-muted">
+        Toetsen: {{ isHost ? '← → of A D' : '↑ ↓ of W S' }}
+      </small>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm" [class.btn-success]="inviteCopied" [class.btn-outline-light]="!inviteCopied" (click)="copyInvite()">
+        {{ inviteCopied ? 'Link gekopieerd!' : 'Uitnodigen' }}
+      </button>
+      <button class="btn btn-outline-light btn-sm" (click)="exitRoom()">Verlaten</button>
+      <a routerLink="/" class="btn btn-outline-light btn-sm">Start</a>
+    </div>
+  </div>
+
+  <div class="coop-stage">
+    <canvas #canvas width="480" height="640" class="coop-canvas"></canvas>
+  </div>
+
+  <div class="coop-controls">
+    <ng-container *ngIf="state.phase !== 'over'">
+      <button class="coop-btn" (pointerdown)="press($event, -1)" (pointerup)="release($event)" (pointercancel)="release($event)" (contextmenu)="$event.preventDefault()">{{ isHost ? '◀' : '▲' }}</button>
+      <button class="coop-btn" (pointerdown)="press($event, 1)" (pointerup)="release($event)" (pointercancel)="release($event)" (contextmenu)="$event.preventDefault()">{{ isHost ? '▶' : '▼' }}</button>
+    </ng-container>
+    <button *ngIf="state.phase === 'over'" class="coop-btn coop-btn-restart" (click)="restart()">Opnieuw spelen</button>
+  </div>
+</div>

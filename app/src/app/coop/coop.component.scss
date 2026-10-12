@@ -1,0 +1,82 @@
+// Mobile first: the game takes the whole (dynamic) viewport. Canvas in the
+// middle scales to whatever space is left, big thumb buttons at the bottom.
+.coop-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: #060a1c;
+  color: #fff;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+.coop-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+}
+
+.coop-stage {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 8px;
+}
+
+.coop-canvas {
+  // auto size + both max constraints: a replaced element keeps its 3:4 ratio
+  // and shrinks to fit the space the stage has left
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  background: #0b1026;
+}
+
+.coop-controls {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.coop-btn {
+  flex: 1;
+  height: 88px;
+  font-size: 2.5rem;
+  line-height: 1;
+  color: #fff;
+  background: #2c3e66;
+  border: 0;
+  border-radius: 16px;
+  touch-action: none;
+
+  &:active {
+    background: #3d5590;
+  }
+}
+
+.coop-btn-restart {
+  background: #0d6efd;
+  font-size: 1.5rem;
+}
+
+// Bigger screens: keep the controls compact.
+@media (min-width: 768px) {
+  .coop-btn {
+    height: 64px;
+  }
+}
