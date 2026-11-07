@@ -1,0 +1,43 @@
+.orbit-page {
+  padding: 12px 8px;
+}
+
+.orbit-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+}
+
+.orbit-frame {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+}
+
+@media (min-width: 768px) {
+  .orbit-page {
+    padding: 24px 16px;
+  }
+
+  .orbit-heading h1 {
+    font-size: 2rem;
+  }
+
+  .orbit-frame {
+    border-radius: 16px;
+  }
+}

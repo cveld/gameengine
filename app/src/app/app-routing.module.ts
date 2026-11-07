@@ -11,6 +11,7 @@ import { MazeComponent } from './maze/maze.component';
 import { MazeRoomsComponent } from './maze-rooms/maze-rooms.component';
 import { FlappyMuisComponent } from './flappy-muis/flappy-muis.component';
 import { CoopComponent } from './coop/coop.component';
+import { OrbitComponent } from './orbit/orbit.component';
 const routes: Routes = [
   { path: '', component: HomeComponent },
   {
@@ -27,6 +28,7 @@ const routes: Routes = [
   { path: 'maze-rooms', component: MazeRoomsComponent },
   { path: 'flappy-muis', component: FlappyMuisComponent },
   { path: 'coop', component: CoopComponent },
+  { path: 'orbit', component: OrbitComponent },
   { path: '**', redirectTo: '' },
 ];
 

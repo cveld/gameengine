@@ -1,0 +1,8 @@
+<div class="container-fluid orbit-page">
+  <div class="orbit-heading">
+    <h1 class="mb-0">Orbit</h1>
+    <a routerLink="/" class="btn btn-outline-secondary btn-sm">Back to home</a>
+  </div>
+  <iframe #orbitFrame [src]="orbitUrl" title="Orbit — interactive 3D sculptures"
+          class="orbit-frame" [style.height.px]="frameHeight" allow="fullscreen"></iframe>
+</div>

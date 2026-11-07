@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Orbit — a little space to play</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="geometry.js" defer></script>
+  <script src="orbit.js" defer></script>
+</head>
+<body>
+  <main class="playground">
+    <header>
+      <div class="wordmark"><span class="orbit-mark" aria-hidden="true">◎</span> orbit <span class="edition">WEBGL</span></div>
+      <button id="help" class="quiet" aria-haspopup="dialog">Shortcuts <kbd>?</kbd></button>
+    </header>
+    <section class="stage" aria-label="Sculpture viewer">
+      <div class="halo" aria-hidden="true"></div>
+      <div class="floor" aria-hidden="true"></div>
+      <canvas id="scene" tabindex="0" aria-label="Animated 3D sculpture. Drag or swipe to orbit, pinch or scroll to zoom."></canvas>
+      <div class="caption"><span class="eyebrow">A LITTLE SPACE TO PLAY</span><h1 id="shape-name">Trefoil knot</h1><p>Nothing to win. Just a world to turn.</p></div>
+      <p id="status" class="status" role="status" hidden></p>
+      <p class="gesture-hint"><span class="touch-hint">Swipe to orbit · Pinch to zoom</span><span class="desktop-hint">Drag to orbit · Scroll to zoom · Double-click to reset camera</span></p>
+    </section>
+    <section class="controls" aria-label="Sculpture controls">
+      <div class="shape-picker" role="group" aria-label="Sculpture">
+        <button data-shape="0" aria-pressed="true">Trefoil knot <kbd>1</kbd></button>
+        <button data-shape="1" aria-pressed="false">Rippling torus <kbd>2</kbd></button>
+        <button data-shape="2" aria-pressed="false">Fluted sphere <kbd>3</kbd></button>
+      </div>
+      <div class="settings">
+        <button id="play" aria-pressed="true">Pause</button>
+        <label class="slider">Tempo <input id="tempo" type="range" min="0.1" max="2" step="0.05" value="1"><output id="tempo-value" for="tempo">1.00×</output></label>
+        <label class="slider">Zoom <input id="zoom" type="range" min="0.55" max="1.65" step="0.01" value="1"><output id="zoom-value" for="zoom">1.00×</output></label>
+        <label class="toggle"><input id="wireframe" type="checkbox"> Wireframe</label>
+        <label class="toggle"><input id="rain" type="checkbox" checked> Rain</label>
+        <button id="reset" class="quiet">Reset</button>
+      </div>
+    </section>
+    <footer><span>Living geometry. Local rendering. No installation needed.</span><span>Adapted from Orbit · <a href="LICENSE">MIT license</a></span></footer>
+  </main>
+  <dialog id="shortcuts" aria-labelledby="shortcuts-title">
+    <h2 id="shortcuts-title">A few small shortcuts</h2>
+    <dl>
+      <dt><kbd>Space</kbd></dt><dd>Play / pause all animation</dd>
+      <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Choose a sculpture</dd>
+      <dt><kbd>W</kbd></dt><dd>Toggle wireframe</dd>
+      <dt><kbd>G</kbd></dt><dd>Toggle rain</dd>
+      <dt><kbd>R</kbd></dt><dd>Reset controls and camera</dd>
+      <dt>Drag / swipe</dt><dd>Orbit the camera</dd>
+      <dt>Pinch / scroll / Zoom</dt><dd>Move closer or further away</dd>
+      <dt>Double-click</dt><dd>Reset the camera only</dd>
+      <dt><kbd>Escape</kbd></dt><dd>Close this dialog</dd>
+    </dl>
+    <form method="dialog"><button autofocus>Back to the sculpture</button></form>
+  </dialog>
+</body>
+</html>
