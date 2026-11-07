@@ -199,7 +199,7 @@ for (const [width, height] of [[320, 568], [360, 640], [390, 844], [430, 932], [
     await withPage({ viewport: { width, height }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }, async page => {
       const layout = await page.evaluate(() => {
         const controls = Array.from(document.querySelectorAll("button, .toggle, input[type=range], footer a"))
-          .filter(element => !element.closest("dialog"));
+          .filter(element => !element.closest("dialog") && element.getClientRects().length);
         return {
           overflow: document.documentElement.scrollWidth > innerWidth,
           targets: controls.map(element => {
@@ -347,6 +347,8 @@ test("fullscreen enters and exits without resetting the sculpture or controls", 
     assert.equal(await page.locator("#fullscreen").getAttribute("aria-pressed"), "true");
     assert.equal(await page.locator("#shape-name").textContent(), "Fluted sphere");
     assert.equal(await page.locator("#wireframe").isChecked(), true);
+    assert.equal(await page.locator(".controls").isVisible(), false);
+    await page.locator("#scene").click();
     await page.locator("#help").click();
     await page.getByRole("button", { name: "Back to the sculpture" }).click();
     await page.locator("#fullscreen").click();
@@ -391,6 +393,7 @@ test("embedded fullscreen returns to content-sized height on mobile", {
     await iframe.locator("#fullscreen").click();
     await page.waitForFunction(() => Boolean(document.fullscreenElement));
     assert.equal(await iframe.locator("#fullscreen").textContent(), "Exit fullscreen");
+    await iframe.locator("#scene").tap();
     await iframe.locator("#fullscreen").click();
     await page.waitForFunction(() => {
       const frame = document.querySelector("iframe.orbit-frame");
@@ -399,6 +402,69 @@ test("embedded fullscreen returns to content-sized height on mobile", {
         Math.abs(frame.clientHeight - doc.querySelector(".playground").getBoundingClientRect().height) < 2;
     });
     assert.equal(await iframe.locator("#fullscreen").getAttribute("aria-pressed"), "false");
+  });
+});
+
+for (const [width, height] of [[1100, 850], [390, 844], [844, 390]]) {
+  test(`immersive fullscreen fills ${width}x${height} and only reveals controls on demand`, async () => {
+    await withPage({ viewport: { width, height }, hasTouch: true }, async page => {
+      await page.locator("#fullscreen").click();
+      await page.waitForFunction(() => Boolean(document.fullscreenElement));
+      for (const selector of ["header", ".controls", "footer", ".caption", ".gesture-hint"]) {
+        assert.equal(await page.locator(selector).isVisible(), false, selector);
+      }
+      const size = await page.locator("#scene").boundingBox();
+      assert.equal(size.x, 0);
+      assert.equal(size.y, 0);
+      assert.equal(size.width, width);
+      assert.equal(size.height, height);
+      await page.mouse.move(width / 2, height / 2);
+      await page.mouse.down();
+      await page.mouse.move(width / 2 + 70, height / 2 + 20);
+      await page.mouse.up();
+      assert.equal(await page.locator(".controls").isVisible(), false);
+      if (width === 390) {
+        const session = await page.context().newCDPSession(page);
+        await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [
+          { id: 0, x: 150, y: height / 2 }, { id: 1, x: 210, y: height / 2 }
+        ] });
+        await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [
+          { id: 0, x: 130, y: height / 2 }, { id: 1, x: 230, y: height / 2 }
+        ] });
+        await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await session.detach();
+        assert.equal(await page.locator(".controls").isVisible(), false);
+        assert.equal(await page.locator("#zoom-value").textContent(), "1.65×");
+      }
+      await page.locator("#scene").tap();
+      assert.equal(await page.locator("#fullscreen").isVisible(), true);
+      assert.equal(await page.locator(".controls").isVisible(), true);
+      await page.locator("#hide-controls").click();
+      assert.equal(await page.locator(".controls").isVisible(), false);
+      await page.keyboard.press("Enter");
+      assert.equal(await page.locator(".controls").isVisible(), true);
+      await page.locator("#hide-controls").click();
+      await page.keyboard.press("Tab");
+      assert.equal(await page.locator("#fullscreen").isVisible(), true);
+      await page.locator("#fullscreen").click();
+      await page.waitForFunction(() => !document.fullscreenElement);
+      assert.equal(await page.locator(".controls").isVisible(), true);
+      assert.equal(await page.locator("#hide-controls").isVisible(), false);
+    });
+  });
+}
+
+test("immersive controls can still be revealed to exit after WebGL context loss", async () => {
+  await withPage({}, async page => {
+    await page.locator("#fullscreen").click();
+    await page.waitForFunction(() => Boolean(document.fullscreenElement));
+    await page.evaluate(() => document.getElementById("scene").getContext("webgl")
+      .getExtension("WEBGL_lose_context").loseContext());
+    await page.waitForFunction(() => !document.getElementById("status").hidden);
+    await page.locator("#scene").click({ position: { x: 50, y: 50 } });
+    assert.equal(await page.locator("#fullscreen").isVisible(), true);
+    await page.locator("#fullscreen").click();
+    await page.waitForFunction(() => !document.fullscreenElement);
   });
 });
 

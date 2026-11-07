@@ -11,6 +11,7 @@
   const dialog = document.getElementById("shortcuts");
   const fullscreenButton = document.getElementById("fullscreen");
   const fullscreenStatus = document.getElementById("fullscreen-status");
+  const hideControlsButton = document.getElementById("hide-controls");
   let fullscreenPending = false;
   const fullscreenSupported = Boolean(document.fullscreenEnabled &&
     document.documentElement.requestFullscreen && document.exitFullscreen);
@@ -362,6 +363,16 @@
     fullscreenButton.setAttribute("aria-pressed", String(active));
     fullscreenButton.disabled = !fullscreenSupported || fullscreenPending;
   }
+  function showImmersiveControls(visible) {
+    document.documentElement.classList.toggle("controls-visible", visible && Boolean(document.fullscreenElement));
+    if (!visible && document.fullscreenElement) canvas.focus({ preventScroll: true });
+  }
+  function toggleImmersiveControls() {
+    if (document.fullscreenElement) {
+      showImmersiveControls(!document.documentElement.classList.contains("controls-visible"));
+    }
+  }
+  hideControlsButton.addEventListener("click", () => showImmersiveControls(false));
   fullscreenButton.addEventListener("click", async () => {
     if (!fullscreenSupported || fullscreenPending) return;
     fullscreenPending = true;
@@ -382,6 +393,8 @@
   });
   document.addEventListener("fullscreenchange", () => {
     pointers.clear(); pinch = null;
+    showImmersiveControls(false);
+    if (!document.fullscreenElement) fullscreenButton.focus({ preventScroll: true });
     syncFullscreen();
     reportSize();
     requestRender();
@@ -393,6 +406,12 @@
   }
 
   document.addEventListener("keydown", event => {
+    if (document.fullscreenElement && event.target === canvas &&
+        (event.key === "Enter" || event.key === "Tab") && !event.repeat) {
+      if (event.key === "Enter") { event.preventDefault(); toggleImmersiveControls(); }
+      else showImmersiveControls(true);
+      return;
+    }
     // Native button, slider and checkbox keyboard behavior takes precedence.
     if (dialog.open || event.altKey || event.ctrlKey || event.metaKey ||
       event.target.closest("input, button, select, textarea, a") || event.target.isContentEditable) return;
@@ -408,10 +427,14 @@
     else reset();
   });
   canvas.addEventListener("pointerdown", event => {
-    if (lost || failed || pointers.size >= 2 || (event.pointerType === "mouse" && event.button !== 0)) return;
-    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (((lost || failed) && !document.fullscreenElement) || pointers.size >= 2 ||
+        (event.pointerType === "mouse" && event.button !== 0)) return;
+    pointers.set(event.pointerId, {
+      x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, tap: true
+    });
     canvas.setPointerCapture(event.pointerId);
     if (pointers.size === 2) {
+      pointers.forEach(pointer => { pointer.tap = false; });
       const [a, b] = Array.from(pointers.values());
       pinch = { distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom: state.zoom };
     }
@@ -420,6 +443,9 @@
   canvas.addEventListener("pointermove", event => {
     const pointer = pointers.get(event.pointerId);
     if (!pointer) return;
+    if (Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) > 8) pointer.tap = false;
+    // Keep tap-to-reveal/exit available even if the graphics context has failed.
+    if (lost || failed) return;
     if (pointers.size === 1) {
       state.yaw += (event.clientX - pointer.x) * 0.008;
       state.pitch = clamp(state.pitch + (event.clientY - pointer.y) * 0.008, -1.4, 1.4);
@@ -433,8 +459,12 @@
     requestRender();
   });
   const endPointer = event => {
+    const pointer = pointers.get(event.pointerId);
+    const tap = pointer?.tap && event.type === "pointerup" &&
+      Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) <= 8;
     if (!pointers.delete(event.pointerId)) return;
     pinch = null;
+    if (tap) toggleImmersiveControls();
   };
   canvas.addEventListener("pointerup", endPointer);
   canvas.addEventListener("pointercancel", endPointer);

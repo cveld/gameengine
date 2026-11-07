@@ -119,14 +119,17 @@ ported. Browser UI strings are English.
 ### Fullscreen
 
 The Orbit header has a Fullscreen / Exit fullscreen toggle. It requests native
-fullscreen for the asset document, keeping the controls, shortcuts dialog and
-exit button available. Browser-driven exit updates the button via
+fullscreen for the asset document. Fullscreen is immersive: the canvas fills the
+viewport and hides the header, controls, caption, hints and footer. Tap/click the
+sculpture or press Enter to toggle the controls overlay; Tab also reveals it for
+keyboard navigation. The overlay includes Exit fullscreen and Hide controls.
+Dragging and pinching do not reveal controls. Browser-driven exit updates the button via
 `fullscreenchange`. Unsupported fullscreen disables the toggle with explanatory
 text; a rejected request leaves Orbit usable and displays a status message.
 The iframe already grants `allow="fullscreen"`.
 
-Fullscreen uses viewport-based stage height and allows vertical scrolling on
-short screens. Resize reports to the Angular parent are suppressed while
+Fullscreen has no page scrolling; revealed header and control overlays can
+scroll individually on short screens. Resize reports to the Angular parent are suppressed while
 fullscreen is active and resume on exit, preserving embedded auto-height.
 
 ### Mobile-first behavior
@@ -182,7 +185,9 @@ CLI's `--include` option to run them without unrelated legacy tests.
 
 - Geometry suite: 6 tests passed.
 - Expanded headless Chromium suite against the mobile-first production build:
-  22 checks passed, including fullscreen toggling, API-driven exit, rejected and
+  26 checks passed, including immersive viewport filling on desktop and mobile,
+  on-demand controls, pinch without revealing UI, exit after WebGL context loss,
+  fullscreen toggling, API-driven exit, rejected and
   unsupported fullscreen, mobile embedded fullscreen restoration,
   the seven-size touch target matrix, two-finger
   pinch bounds and handoff, embedded auto-height after rotation, pause,

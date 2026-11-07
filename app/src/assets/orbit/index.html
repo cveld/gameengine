@@ -14,7 +14,8 @@
     <header>
       <div class="wordmark"><span class="orbit-mark" aria-hidden="true">◎</span> orbit <span class="edition">WEBGL</span></div>
       <div class="header-actions">
-        <button id="fullscreen" class="quiet" aria-pressed="false" aria-describedby="fullscreen-status">Fullscreen</button>
+        <button id="fullscreen" class="quiet" aria-pressed="false" aria-describedby="fullscreen-status" title="Immersive fullscreen. Tap the sculpture to show controls.">Fullscreen</button>
+        <button id="hide-controls" class="quiet">Hide controls</button>
         <button id="help" class="quiet" aria-haspopup="dialog">Shortcuts <kbd>?</kbd></button>
       </div>
       <p id="fullscreen-status" class="fullscreen-status" role="status" hidden></p>
@@ -22,7 +23,7 @@
     <section class="stage" aria-label="Sculpture viewer">
       <div class="halo" aria-hidden="true"></div>
       <div class="floor" aria-hidden="true"></div>
-      <canvas id="scene" tabindex="0" aria-label="Animated 3D sculpture. Drag or swipe to orbit, pinch or scroll to zoom."></canvas>
+      <canvas id="scene" tabindex="0" aria-label="Animated 3D sculpture. Drag or swipe to orbit, pinch or scroll to zoom. In fullscreen, tap or press Enter to show or hide controls."></canvas>
       <div class="caption"><span class="eyebrow">A LITTLE SPACE TO PLAY</span><h1 id="shape-name">Trefoil knot</h1><p>Nothing to win. Just a world to turn.</p></div>
       <p id="status" class="status" role="status" hidden></p>
       <p class="gesture-hint"><span class="touch-hint">Swipe to orbit · Pinch to zoom</span><span class="desktop-hint">Drag to orbit · Scroll to zoom · Double-click to reset camera</span></p>
@@ -55,6 +56,8 @@
       <dt>Drag / swipe</dt><dd>Orbit the camera</dd>
       <dt>Pinch / scroll / Zoom</dt><dd>Move closer or further away</dd>
       <dt>Double-click</dt><dd>Reset the camera only</dd>
+      <dt>Tap / Enter</dt><dd>Show or hide controls in fullscreen</dd>
+      <dt><kbd>Tab</kbd></dt><dd>Reveal fullscreen controls for keyboard navigation</dd>
       <dt><kbd>Escape</kbd></dt><dd>Close this dialog</dd>
     </dl>
     <form method="dialog"><button autofocus>Back to the sculpture</button></form>
