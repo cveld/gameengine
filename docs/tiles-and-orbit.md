@@ -116,6 +116,19 @@ displays guidance instead of a blank, apparently working viewer.
 Omarchy theme/language synchronization and desktop Quit behavior are not
 ported. Browser UI strings are English.
 
+### Fullscreen
+
+The Orbit header has a Fullscreen / Exit fullscreen toggle. It requests native
+fullscreen for the asset document, keeping the controls, shortcuts dialog and
+exit button available. Browser-driven exit updates the button via
+`fullscreenchange`. Unsupported fullscreen disables the toggle with explanatory
+text; a rejected request leaves Orbit usable and displays a status message.
+The iframe already grants `allow="fullscreen"`.
+
+Fullscreen uses viewport-based stage height and allows vertical scrolling on
+short screens. Resize reports to the Angular parent are suppressed while
+fullscreen is active and resume on exit, preserving embedded auto-height.
+
 ### Mobile-first behavior
 
 The base CSS targets narrow touch screens; `min-width` breakpoints enhance the
@@ -169,7 +182,9 @@ CLI's `--include` option to run them without unrelated legacy tests.
 
 - Geometry suite: 6 tests passed.
 - Expanded headless Chromium suite against the mobile-first production build:
-  19 checks passed, including the seven-size touch target matrix, two-finger
+  22 checks passed, including fullscreen toggling, API-driven exit, rejected and
+  unsupported fullscreen, mobile embedded fullscreen restoration,
+  the seven-size touch target matrix, two-finger
   pinch bounds and handoff, embedded auto-height after rotation, pause,
   visibility changes, context recovery, unsupported-WebGL fallback,
   tile navigation and direct `/orbit` loading.

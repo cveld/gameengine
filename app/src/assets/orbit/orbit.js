@@ -9,6 +9,11 @@
   const wireframe = document.getElementById("wireframe");
   const rain = document.getElementById("rain");
   const dialog = document.getElementById("shortcuts");
+  const fullscreenButton = document.getElementById("fullscreen");
+  const fullscreenStatus = document.getElementById("fullscreen-status");
+  let fullscreenPending = false;
+  const fullscreenSupported = Boolean(document.fullscreenEnabled &&
+    document.documentElement.requestFullscreen && document.exitFullscreen);
   const shapeButtons = Array.from(document.querySelectorAll("[data-shape]"));
   const shapeNames = ["Trefoil knot", "Rippling torus", "Fluted sphere"];
   const state = {
@@ -351,6 +356,41 @@
   rain.addEventListener("change", () => { state.rain = rain.checked; requestRender(); });
   document.getElementById("reset").addEventListener("click", reset);
   document.getElementById("help").addEventListener("click", () => dialog.showModal());
+  function syncFullscreen() {
+    const active = Boolean(document.fullscreenElement);
+    fullscreenButton.textContent = active ? "Exit fullscreen" : "Fullscreen";
+    fullscreenButton.setAttribute("aria-pressed", String(active));
+    fullscreenButton.disabled = !fullscreenSupported || fullscreenPending;
+  }
+  fullscreenButton.addEventListener("click", async () => {
+    if (!fullscreenSupported || fullscreenPending) return;
+    fullscreenPending = true;
+    fullscreenStatus.hidden = true;
+    syncFullscreen();
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch (error) {
+      fullscreenStatus.textContent = "Fullscreen was denied by the browser. You can continue using Orbit here.";
+      fullscreenStatus.hidden = false;
+    } finally {
+      fullscreenPending = false;
+      syncFullscreen();
+      reportSize();
+      requestRender();
+    }
+  });
+  document.addEventListener("fullscreenchange", () => {
+    pointers.clear(); pinch = null;
+    syncFullscreen();
+    reportSize();
+    requestRender();
+  });
+  syncFullscreen();
+  if (!fullscreenSupported) {
+    fullscreenStatus.textContent = "Fullscreen is not available in this browser.";
+    fullscreenStatus.hidden = false;
+  }
 
   document.addEventListener("keydown", event => {
     // Native button, slider and checkbox keyboard behavior takes precedence.
@@ -428,6 +468,8 @@
     if (event.persisted) { suspended = false; initialize(); }
   });
   function reportSize() {
+    // Fullscreen has its own viewport; keep the embedded height unchanged until exit.
+    if (document.fullscreenElement) return;
     // Measure content, not the iframe viewport. Width-based stage sizing prevents
     // a height feedback loop when the parent applies this measurement.
     const height = Math.ceil(document.querySelector(".playground").getBoundingClientRect().height);

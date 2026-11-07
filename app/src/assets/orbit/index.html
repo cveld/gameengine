@@ -13,7 +13,11 @@
   <main class="playground">
     <header>
       <div class="wordmark"><span class="orbit-mark" aria-hidden="true">◎</span> orbit <span class="edition">WEBGL</span></div>
-      <button id="help" class="quiet" aria-haspopup="dialog">Shortcuts <kbd>?</kbd></button>
+      <div class="header-actions">
+        <button id="fullscreen" class="quiet" aria-pressed="false" aria-describedby="fullscreen-status">Fullscreen</button>
+        <button id="help" class="quiet" aria-haspopup="dialog">Shortcuts <kbd>?</kbd></button>
+      </div>
+      <p id="fullscreen-status" class="fullscreen-status" role="status" hidden></p>
     </header>
     <section class="stage" aria-label="Sculpture viewer">
       <div class="halo" aria-hidden="true"></div>

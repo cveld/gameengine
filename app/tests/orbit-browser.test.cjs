@@ -337,4 +337,69 @@ test("home tile opens Orbit and its back link returns home in a built app", {
   });
 });
 
+test("fullscreen enters and exits without resetting the sculpture or controls", async () => {
+  await withPage({}, async page => {
+    await page.locator('[data-shape="2"]').click();
+    await page.locator("#wireframe").check();
+    await page.locator("#fullscreen").click();
+    await page.waitForFunction(() => Boolean(document.fullscreenElement));
+    assert.equal(await page.locator("#fullscreen").textContent(), "Exit fullscreen");
+    assert.equal(await page.locator("#fullscreen").getAttribute("aria-pressed"), "true");
+    assert.equal(await page.locator("#shape-name").textContent(), "Fluted sphere");
+    assert.equal(await page.locator("#wireframe").isChecked(), true);
+    await page.locator("#help").click();
+    await page.getByRole("button", { name: "Back to the sculpture" }).click();
+    await page.locator("#fullscreen").click();
+    await page.waitForFunction(() => !document.fullscreenElement);
+    assert.equal(await page.locator("#fullscreen").getAttribute("aria-pressed"), "false");
+    await page.locator("#fullscreen").click();
+    await page.waitForFunction(() => Boolean(document.fullscreenElement));
+    // Exercise browser/API-driven exit as well as the toggle.
+    await page.evaluate(() => document.exitFullscreen());
+    await page.waitForFunction(() => document.getElementById("fullscreen").textContent === "Fullscreen");
+  });
+});
+
+test("fullscreen support and rejected requests have accessible fallbacks", async () => {
+  for (const supported of [false, true]) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    try {
+      await page.addInitScript(value => {
+        Object.defineProperty(document, "fullscreenEnabled", { configurable: true, value });
+        if (value) Element.prototype.requestFullscreen = () => Promise.reject(new Error("Denied"));
+      }, supported);
+      await page.goto(origin + "/assets/orbit/index.html");
+      if (supported) await page.locator("#fullscreen").click();
+      assert.equal(await page.locator("#fullscreen-status").isVisible(), true);
+      assert.match(await page.locator("#fullscreen-status").textContent(), supported ? /denied/ : /not available/);
+      assert.equal(await page.locator("#fullscreen").isDisabled(), !supported);
+      assert.equal(await page.locator("#fullscreen").getAttribute("aria-pressed"), "false");
+    } finally {
+      await context.close();
+    }
+  }
+});
+
+test("embedded fullscreen returns to content-sized height on mobile", {
+  skip: !process.env.ORBIT_TEST_ROOT
+}, async () => {
+  await withPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }, async page => {
+    await page.goto(origin + "/orbit");
+    const iframe = page.frameLocator("iframe.orbit-frame");
+    await iframe.locator("#fullscreen").click();
+    await page.waitForFunction(() => Boolean(document.fullscreenElement));
+    assert.equal(await iframe.locator("#fullscreen").textContent(), "Exit fullscreen");
+    await iframe.locator("#fullscreen").click();
+    await page.waitForFunction(() => {
+      const frame = document.querySelector("iframe.orbit-frame");
+      const doc = frame?.contentDocument;
+      return !document.fullscreenElement && doc &&
+        Math.abs(frame.clientHeight - doc.querySelector(".playground").getBoundingClientRect().height) < 2;
+    });
+    assert.equal(await iframe.locator("#fullscreen").getAttribute("aria-pressed"), "false");
+  });
+});
+
 test("no unexpected JavaScript errors occurred", () => assert.deepEqual(errors, []));
