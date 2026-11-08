@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { multiply, anchorFromPose, position } = require("../src/assets/orbit/xr-math.js");
+const { multiply, anchorFromPose, position, moveOffset } = require("../src/assets/orbit/xr-math.js");
 const identity = () => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-5, `${a} differs from ${b}`);
 
@@ -38,4 +38,28 @@ test("vertical gaze has a stable finite forward fallback", () => {
   transform[8] = 0; transform[9] = 1; transform[10] = 0;
   assert.deepEqual(anchorFromPose(transform).forward, [0, 0, -1]);
   assert.ok(position(anchorFromPose(transform), 0.85).every(Number.isFinite));
+});
+
+test("object translation uses horizontal heading, separate height and normalized diagonal speed", () => {
+  const heading = anchorFromPose(identity()), offset = new Float32Array(3);
+  assert.equal(moveOffset(offset, heading, 1, 0, 0, 0.1), offset);
+  near(offset[0], 0.06); near(offset[1], 0); near(offset[2], 0);
+  moveOffset(offset, heading, 0, 1, 1, 0.1);
+  near(offset[1], 0.06 / Math.sqrt(2)); near(offset[2], -0.06 / Math.sqrt(2));
+  const diagonal = moveOffset(new Float32Array(3), heading, 1, 1, 0, 0.1);
+  near(Math.hypot(...diagonal), 0.06);
+  const facingRight = identity(); facingRight[8] = -1; facingRight[10] = 0;
+  const turned = moveOffset(new Float32Array(3), anchorFromPose(facingRight), 0, 1, 0, 0.1);
+  near(turned[0], 0.06); near(turned[1], 0); near(turned[2], 0);
+});
+
+test("object translation has bounded travel and no catch-up jump after a delayed frame", () => {
+  const heading = anchorFromPose(identity()), offset = new Float32Array([2.99, 1.99, -2.99]);
+  moveOffset(offset, heading, 1, 1, 1, 0.1);
+  assert.deepEqual(Array.from(offset), [3, 2, -3]);
+  for (let i = 0; i < 200; i++) moveOffset(offset, heading, -1, -1, -1, 0.1);
+  assert.deepEqual(Array.from(offset), [-3, -2, 3]);
+  const late = moveOffset(new Float32Array(3), heading, 1, 0, 0, 10);
+  near(late[0], 0.06);
+  assert.deepEqual(moveOffset(late, heading, 0, 0, 0, 0.1), late);
 });

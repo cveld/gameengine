@@ -17,12 +17,14 @@
       <div class="wordmark"><span class="orbit-mark" aria-hidden="true">◎</span> orbit <span class="edition">WEBGL</span></div>
       <div class="header-actions">
         <button id="enter-vr" class="quiet" aria-pressed="false" aria-describedby="vr-status" disabled>Enter VR</button>
+        <button id="enter-ar" class="quiet" aria-pressed="false" aria-describedby="ar-status" title="Passthrough AR: a floating sculpture in your room. Clear space before walking around it." disabled>Enter AR</button>
         <button id="fullscreen" class="quiet" aria-pressed="false" aria-describedby="fullscreen-status" title="Immersive fullscreen. Tap the sculpture to show controls.">Fullscreen</button>
         <button id="hide-controls" class="quiet">Hide controls</button>
         <button id="help" class="quiet" aria-haspopup="dialog">Shortcuts <kbd>?</kbd></button>
       </div>
       <p id="fullscreen-status" class="fullscreen-status" role="status" hidden></p>
       <p id="vr-status" class="fullscreen-status" role="status" hidden></p>
+      <p id="ar-status" class="fullscreen-status" role="status" hidden></p>
     </header>
     <section class="stage" aria-label="Sculpture viewer">
       <div class="halo" aria-hidden="true"></div>
@@ -62,11 +64,14 @@
       <dt>Double-click</dt><dd>Reset the camera only</dd>
       <dt>Tap / Enter</dt><dd>Show or hide controls in fullscreen</dd>
       <dt><kbd>Tab</kbd></dt><dd>Reveal fullscreen controls for keyboard navigation</dd>
-      <dt>VR trigger</dt><dd>Play / pause the sculpture</dd>
-      <dt>VR grip</dt><dd>Choose the next sculpture</dd>
-      <dt>Left thumbstick</dt><dd>Bring the sculpture closer / further away</dd>
+      <dt>VR trigger / AR right trigger</dt><dd>Play / pause the sculpture</dd>
+      <dt>VR / AR grip</dt><dd>Choose the next sculpture</dd>
+      <dt>VR left thumbstick</dt><dd>Bring the sculpture closer / further away</dd>
       <dt>Right thumbstick</dt><dd>Rotate the sculpture</dd>
-      <dt>Headset system menu</dt><dd>Exit VR and return to the browser</dd>
+      <dt>Headset system menu</dt><dd>Exit VR / AR and return to the browser</dd>
+      <dt>AR mode</dt><dd>See your room and physically walk around the fixed floating sculpture</dd>
+      <dt>AR left thumbstick</dt><dd>Move the sculpture left/right and forward/back relative to your horizontal gaze; release to keep its new position</dd>
+      <dt>AR left trigger + thumbstick</dt><dd>Hold the trigger and push up/down to raise/lower the sculpture</dd>
       <dt><kbd>Escape</kbd></dt><dd>Close this dialog</dd>
     </dl>
     <form method="dialog"><button autofocus>Back to the sculpture</button></form>

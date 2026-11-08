@@ -23,7 +23,20 @@
     for (let i = 0; i < 3; i++) out[i] = anchor.origin[i] + anchor.forward[i] * distance;
     return out;
   }
-  const api = { multiply, anchorFromPose, position };
+  function moveOffset(offset, heading, sideways, forward, up, dt) {
+    // Move the object, never the viewer. Normalize diagonal input and cap travel
+    // relative to initial placement: +/-3 m horizontally and +/-2 m vertically.
+    const length = Math.max(1, Math.hypot(sideways, forward, up));
+    const step = 0.6 * Math.min(0.1, Math.max(0, dt)) / length;
+    const f = heading.forward;
+    const delta = [-f[2] * sideways + f[0] * forward, up, f[0] * sideways + f[2] * forward];
+    for (let i = 0; i < 3; i++) {
+      const limit = i === 1 ? 2 : 3;
+      offset[i] = Math.max(-limit, Math.min(limit, offset[i] + delta[i] * step));
+    }
+    return offset;
+  }
+  const api = { multiply, anchorFromPose, position, moveOffset };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.OrbitXRMath = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

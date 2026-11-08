@@ -95,7 +95,7 @@ Assets are self-contained under `app/src/assets/orbit`:
   It also exports its geometry functions through CommonJS for Node tests.
 - `orbit.js`: WebGL 1 shaders, flat-lit triangles, wireframe lines, stars, light
   motes and rain; pointer/keyboard input and renderer lifecycle.
-- `xr.js`: immersive VR capability detection, session lifecycle, per-eye
+- `xr.js`: independent immersive VR/AR capability detection, session lifecycle, per-eye
   WebXR rendering and controller input.
 - `xr-math.js`: tested column-major matrix composition and world-locked
   sculpture placement.
@@ -172,7 +172,7 @@ VR ends. Ending/re-entering VR restores browser rendering and existing controls.
 Missing tracking poses and hidden/blurred XR sessions do not advance animation.
 Context loss and page exit end the XR session and restore/release resources.
 
-This is VR, not passthrough AR. The browser's flat rain, stars, halo and floor
+The **Enter VR** mode is VR, not passthrough AR. The browser's flat rain, stars, halo and floor
 effects are intentionally not rendered in VR: only the actual lit 3D sculpture
 is shown, avoiding head-locked background graphics. Browser zoom controls remain
 0.55–4× in flat mode; VR uses physical approach/head movement and the controller's
@@ -185,7 +185,88 @@ rendering; **no physical Quest or real headset compositor has been tested**.
 Quest controller mappings, comfort, performance and permissions still need an
 on-device check.
 
-WebXR validation on November 8, 2026:
+### Passthrough AR / walk-around sculpture
+
+Choose the separate **Enter AR** button in the Quest browser and allow the
+headset's AR permissions. This requests `immersive-ar`, independently of
+`immersive-vr` support. Only one session can run at a time; exit one mode before
+entering the other. Unsupported or rejected AR displays a message and never
+silently falls back to VR.
+
+AR renders a transparent background in an alpha-enabled XR layer, allowing
+the headset compositor to show passthrough (or a supported additive transparent
+display). The actual sculpture is rendered as opaque stereo geometry. Opaque
+AR composition is rejected rather than covering the room with a dark background.
+The application does not access camera image data.
+
+The sculpture floats 1.8 meters ahead at the initial eye height and keeps a
+fixed reference-space position and physical scale. Physically move sideways,
+closer or around its back to see other sides; headset pose/projection changes
+the view, not the sculpture position. To move the object deliberately in AR:
+
+- Left thumbstick: move left/right and forward/back relative to the headset's
+  current horizontal gaze, at up to 0.6 meters per second.
+- Hold the left trigger and push that thumbstick up/down: raise/lower the object.
+  In this height mode, left/right input is ignored. The left trigger does not
+  also toggle pause when released.
+- Release the stick: keep the new reference-space position, even when walking,
+  turning, pausing or changing shape.
+- Right trigger: play/pause. Grip: next sculpture. Right thumbstick: rotation.
+
+Diagonal movement is normalized, small stick drift is ignored, and offsets
+are limited to +/-3 meters on each horizontal reference-space axis and +/-2
+meters vertically relative to initial placement. These are travel limits, not
+room boundaries or obstacle detection. Tracking/visibility gaps do not cause
+catch-up movement. Reference-space reset or a new session clears the offsets.
+Only `xr-standard` controller input is handled; there is no hand-tracking drag
+gesture. The session has no HTML panels or virtual camera locomotion.
+
+This is initial in-air placement, not plane detection or a saved room anchor.
+There is no hit-test placement, room mesh, real-furniture occlusion, collision
+detection or persistent placement between sessions. A headset reference-space
+reset re-centers placement; merely walking/turning does not. Starting AR again
+places the object ahead of the current initial gaze.
+
+Clear a safe area before entering AR. The app cannot detect obstacles; use the
+headset's boundary and avoid walking into furniture. Passthrough appearance,
+AR permissions and tracking on a physical Quest still need an on-device check.
+
+AR implementation follows the Immersive Web Working Group's
+`webxr-samples/immersive-ar-session.html` example. Synthetic tests verify
+framebuffer transparency, not the headset's passthrough compositor.
+The AR movement modifier uses the group's `webxr-gamepads-module` mapping:
+primary trigger `buttons[0]`, thumbstick `axes[2]` / `axes[3]`.
+
+AR movement validation on November 8, 2026:
+
+- All 24 XR browser checks and 27 normal browser regressions passed with the
+  updated static assets copied into the previously built Angular app.
+- All 6 geometry and 6 XR math tests passed. Added coverage includes horizontal
+  gaze-relative translation, trigger-modified height, fixed placement on release,
+  dead zones, invalid controller input, normalized diagonals, travel bounds,
+  tracking gaps, reset/re-entry and unchanged right-trigger/grip actions.
+- No Angular source or dependency changes were needed, so no new Angular build
+  was run for this asset-only change. Physical Quest validation is still pending.
+
+Initial AR validation on November 8, 2026 (before movement controls):
+
+- 21 synthetic XR browser tests passed against the production build, including
+  transparent/opaque pixel coverage, stereo output, front/side/back walk-around
+  poses, fixed placement during controller input, shape changes and pause,
+  additive composition, independent VR/AR support, exit recovery and unsupported,
+  denied or opaque AR sessions and both entry modes from the Angular iframe.
+- All 27 existing browser regressions and 6 geometry / 4 XR math tests passed.
+  Mobile touch targets, iframe auto-height, fullscreen and tile navigation remain
+  covered. The source-asset run also passed (19 XR / 24 browser tests, with
+  built-app-only checks skipped).
+- The production build passed. Initial bundle: 717.92 kB, with the existing
+  500 kB warning budget exceeded; the 1 MB error budget is not exceeded.
+  No application dependencies or build budgets were changed.
+- These checks simulate headset poses and session events using real WebGL
+  framebuffer rendering. They do not validate physical Quest passthrough,
+  controller mappings, comfort, tracking accuracy or performance.
+
+Initial VR validation on November 8, 2026 (before the AR addition):
 
 - 14 synthetic XR browser tests passed against the production build: per-eye
   viewports and projections, actual nonempty/different WebGL eye images,

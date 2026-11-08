@@ -46,10 +46,253 @@ async function withXR(config, run) {
     throw error;
   } finally { await context.close(); }
 }
-async function start(page) {
-  await page.locator("#enter-vr").click();
-  await page.waitForFunction(() => document.documentElement.classList.contains("vr-active"));
+async function start(page, mode = "vr") {
+  await page.locator("#enter-" + mode).click();
+  await page.waitForFunction(value => document.documentElement.classList.contains(value + "-active"), mode);
 }
+
+test("AR uses passthrough transparency with stereo opaque sculpture geometry", async () => {
+  await withXR({}, async page => {
+    await start(page, "ar");
+    const result = await page.evaluate(() => {
+      mockXR.device.step(100);
+      return { request: mockXR.requests[0], layer: mockXR.layerOptions[0], image: mockXR.device.pixels() };
+    });
+    assert.equal(result.request.mode, "immersive-ar");
+    assert.equal(result.layer.alpha, true);
+    assert.equal(result.image.error, 0);
+    assert.ok(result.image.transparent.every(count => count > 100000), "Passthrough needs clear alpha outside the sculpture");
+    assert.ok(result.image.opaque.every(count => count > 5000), "The sculpture itself must be opaque");
+    assert.ok(result.image.counts.every(count => count > 5000));
+    assert.notEqual(result.image.hashes[0], result.image.hashes[1]);
+    assert.equal(await page.locator("#enter-ar").textContent(), "Exit AR");
+    assert.equal(await page.locator("#enter-vr").isDisabled(), true);
+  });
+});
+
+test("AR sculpture stays fixed while walking around its front, sides and back", async () => {
+  await withXR({}, async page => {
+    await start(page, "ar");
+    const output = await page.evaluate(() => {
+      const positions = [], images = [];
+      // Walk a circle around the object at (0, 1.6, -1.8), looking inward.
+      for (const [i, angle] of [0, Math.PI / 2, Math.PI, -Math.PI / 2].entries()) {
+        const x = 1.8 * Math.sin(angle), z = -1.8 + 1.8 * Math.cos(angle);
+        mockXR.device.step(i * 100, x, 1.6, z, angle);
+        positions.push(mockXR.positions.at(-1));
+        images.push(mockXR.device.pixels());
+      }
+      mockXR.device.inputSources = [{ handedness: "left", gamepad: { mapping: "xr-standard", axes: [0, 0, 0, 0] } }];
+      for (let i = 4; i < 20; i++) mockXR.device.step(i * 100, -1.8, 1.6, -1.8, -Math.PI / 2);
+      return { positions, images, afterStick: mockXR.positions.at(-1) };
+    });
+    for (const p of output.positions) assert.deepEqual(p, output.positions[0]);
+    assert.deepEqual(output.afterStick, output.positions[0], "A neutral stick must keep placement world-locked");
+    for (const image of output.images) {
+      assert.equal(image.error, 0);
+      assert.ok(image.counts.every(count => count > 5000), "Each viewpoint should see a spatial sculpture");
+      assert.ok(image.transparent.every(count => count > 100000));
+    }
+    assert.notDeepEqual(output.images[0].hashes, output.images[1].hashes);
+    assert.notDeepEqual(output.images[0].hashes, output.images[2].hashes);
+  });
+});
+
+test("AR left stick moves the object relative to horizontal gaze and release keeps its new position", async () => {
+  await withXR({}, async page => {
+    await start(page, "ar");
+    const result = await page.evaluate(() => {
+      const device = mockXR.device;
+      const controller = { handedness: "left", gamepad: { mapping: "xr-standard", axes: [0, 0, 1, 0] } };
+      device.step(0);
+      const initial = mockXR.positions.at(-1);
+      device.inputSources = [controller];
+      device.step(100);
+      const right = mockXR.positions.at(-1);
+      controller.gamepad.axes = [0, 0, 0, -1];
+      device.step(200, 0, 1.6, 0, Math.PI / 2);
+      const turned = mockXR.positions.at(-1);
+      controller.gamepad.axes = [0, 0, 0, 0];
+      device.step(300, 1, 1.9, -0.4, -Math.PI / 2);
+      const released = mockXR.positions.at(-1);
+      controller.gamepad.axes = [0, 0, 0.1, -0.1];
+      device.step(400);
+      return { initial, right, turned, released, deadzone: mockXR.positions.at(-1), image: device.pixels() };
+    });
+    assert.ok(Math.abs(result.right[0] - result.initial[0] - 0.06) < 1e-5);
+    assert.ok(Math.abs(result.turned[0] - result.right[0] + 0.06) < 1e-5);
+    assert.equal(result.turned[1], result.initial[1]);
+    assert.equal(result.turned[2], result.initial[2]);
+    assert.deepEqual(result.released, result.turned);
+    assert.deepEqual(result.deadzone, result.turned);
+    assert.equal(result.image.error, 0);
+    assert.ok(result.image.transparent.every(count => count > 100000));
+  });
+});
+
+test("AR left trigger changes height without toggling pause; right trigger and grip retain their actions", async () => {
+  await withXR({}, async page => {
+    await start(page, "ar");
+    const result = await page.evaluate(() => {
+      const device = mockXR.device;
+      device.step(0);
+      const initial = mockXR.positions.at(-1), playBefore = document.getElementById("play").textContent;
+      const inputSource = { handedness: "left", gamepad: {
+        mapping: "xr-standard", axes: [0, 0, 1, -1], buttons: [{ pressed: true }]
+      } };
+      device.inputSources = [inputSource];
+      device.step(100);
+      const raised = mockXR.positions.at(-1);
+      const leftSelect = new Event("select");
+      Object.defineProperty(leftSelect, "inputSource", { value: inputSource });
+      device.dispatchEvent(leftSelect);
+      const afterLeft = document.getElementById("play").textContent;
+      const rightSelect = new Event("select");
+      Object.defineProperty(rightSelect, "inputSource", { value: { handedness: "right" } });
+      device.dispatchEvent(rightSelect);
+      const afterRight = document.getElementById("play").textContent;
+      device.dispatchEvent(new Event("squeeze"));
+      inputSource.gamepad.axes = [0, 0, 0, 1];
+      device.step(200);
+      const lowered = mockXR.positions.at(-1);
+      inputSource.gamepad.axes = [0, 0, 0, 0];
+      device.step(300, 0.5);
+      return { initial, raised, lowered, released: mockXR.positions.at(-1),
+        playBefore, afterLeft, afterRight, shape: document.getElementById("shape-name").textContent };
+    });
+    assert.equal(result.raised[0], result.initial[0], "Height mode must not strafe");
+    assert.equal(result.raised[2], result.initial[2]);
+    assert.ok(Math.abs(result.raised[1] - result.initial[1] - 0.06) < 1e-5);
+    assert.ok(Math.abs(result.lowered[1] - result.initial[1]) < 1e-5);
+    assert.deepEqual(result.released, result.lowered);
+    assert.equal(result.afterLeft, result.playBefore);
+    assert.notEqual(result.afterRight, result.playBefore);
+    assert.equal(result.shape, "Rippling torus");
+  });
+});
+
+test("AR movement ignores invalid controllers and tracking gaps; reset and re-entry clear placement offsets", async () => {
+  await withXR({}, async page => {
+    await start(page, "ar");
+    const output = await page.evaluate(() => {
+      const device = mockXR.device;
+      device.step(0);
+      const initial = mockXR.positions.at(-1);
+      const pad = { mapping: "", axes: [0, 0, 1, -1] };
+      device.inputSources = [{ handedness: "left", gamepad: pad }];
+      device.step(100);
+      const invalid = mockXR.positions.at(-1);
+      pad.mapping = "xr-standard"; pad.axes = [0, 0, NaN, Infinity];
+      device.step(200);
+      const nonfinite = mockXR.positions.at(-1);
+      pad.axes = [0, 0, 1, 0]; device.step(300);
+      const moved = mockXR.positions.at(-1);
+      mockXR.missingPose = true; device.step(10000);
+      mockXR.missingPose = false; device.step(11000);
+      const recovered = mockXR.positions.at(-1);
+      device.visibilityState = "hidden"; device.dispatchEvent(new Event("visibilitychange")); device.step(12000);
+      device.visibilityState = "visible"; device.dispatchEvent(new Event("visibilitychange")); device.step(20000);
+      const resumed = mockXR.positions.at(-1);
+      pad.axes.fill(0);
+      device.space.dispatchEvent(new Event("reset")); device.step(20100);
+      return { initial, invalid, nonfinite, moved, recovered, resumed, reset: mockXR.positions.at(-1) };
+    });
+    assert.deepEqual(output.invalid, output.initial);
+    assert.deepEqual(output.nonfinite, output.initial);
+    assert.notDeepEqual(output.moved, output.initial);
+    assert.deepEqual(output.recovered, output.moved);
+    assert.deepEqual(output.resumed, output.moved);
+    assert.deepEqual(output.reset, output.initial);
+    await page.locator("#enter-ar").click();
+    await start(page, "ar");
+    const fresh = await page.evaluate(() => { mockXR.device.step(0); return mockXR.positions.at(-1); });
+    assert.deepEqual(fresh, output.initial);
+  });
+});
+
+test("VR and AR support are independent; ending AR restores the browser and allows VR", async () => {
+  await withXR({ supported: false }, async page => {
+    await page.waitForFunction(() => !document.getElementById("enter-ar").disabled);
+    assert.equal(await page.locator("#enter-vr").isDisabled(), true);
+    const before = await page.locator("#scene").screenshot();
+    await start(page, "ar");
+    await page.evaluate(() => mockXR.device.step(100));
+    await page.locator("#enter-ar").click();
+    await page.waitForFunction(() => !document.documentElement.classList.contains("xr-active"));
+    assert.ok((await page.locator("#scene").screenshot()).equals(before));
+    await page.evaluate(() => { mockXR.supported = true; navigator.xr.dispatchEvent(new Event("devicechange")); });
+    await page.waitForFunction(() => !document.getElementById("enter-vr").disabled);
+    await start(page);
+    assert.equal(await page.locator("#enter-ar").isDisabled(), true);
+    const vr = await page.evaluate(() => { mockXR.device.step(100); return mockXR.device.pixels(); });
+    assert.deepEqual(vr.transparent, [0, 0], "VR retains its opaque dark environment");
+  });
+});
+
+test("AR supports additive composition and wireframe keeps transparent surroundings", async () => {
+  await withXR({ arBlendMode: "additive" }, async page => {
+    await page.locator("#wireframe").check();
+    await start(page, "ar");
+    const result = await page.evaluate(() => {
+      mockXR.device.step(100);
+      return { image: mockXR.device.pixels(), layer: mockXR.layerOptions[0] };
+    });
+    assert.equal(result.layer.alpha, true);
+    assert.equal(result.image.error, 0);
+    assert.ok(result.image.transparent.every(count => count > 100000));
+    assert.ok(result.image.counts.every(count => count > 1000));
+  });
+});
+
+test("AR keeps the room-relative position when changing shape or pausing and ends on page exit", async () => {
+  await withXR({}, async page => {
+    await start(page, "ar");
+    const result = await page.evaluate(() => {
+      const device = mockXR.device;
+      device.step(100);
+      const initial = mockXR.positions.at(-1);
+      device.dispatchEvent(new Event("squeeze"));
+      device.dispatchEvent(new Event("select"));
+      device.step(200, 0.6, 1.6, -0.5);
+      const afterControls = mockXR.positions.at(-1);
+      device.visibilityState = "visible-blurred";
+      device.dispatchEvent(new Event("visibilitychange"));
+      const beforeHidden = mockXR.draws.length;
+      device.step(300);
+      return { initial, afterControls, beforeHidden, afterHidden: mockXR.draws.length };
+    });
+    assert.deepEqual(result.afterControls, result.initial);
+    assert.equal(result.beforeHidden, result.afterHidden);
+    assert.equal(await page.locator("#shape-name").textContent(), "Rippling torus");
+    assert.equal(await page.locator("#play").textContent(), "Pause");
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide")));
+    await page.waitForFunction(() => mockXR.device.ended);
+    assert.equal(await page.evaluate(() => mockXR.device.callbacks.size), 0);
+    assert.equal(await page.evaluate(() => document.documentElement.classList.contains("ar-active")), false);
+  });
+});
+
+test("unsupported AR and opaque AR sessions never silently enter VR or hide the room", async () => {
+  for (const config of [{ arSupported: false }, { arBlendMode: "opaque" }, { failRequest: true }, { failSetup: true }]) {
+    await withXR(config, async page => {
+      if (config.arSupported === false) {
+        await page.waitForFunction(() => !document.getElementById("ar-status").hidden);
+        assert.equal(await page.locator("#enter-ar").isDisabled(), true);
+        assert.equal(await page.locator("#enter-vr").isDisabled(), false);
+      } else {
+        await page.locator("#enter-ar").click();
+        await page.waitForFunction(() => !document.getElementById("ar-status").hidden && !document.getElementById("enter-ar").disabled);
+        assert.match(await page.locator("#ar-status").textContent(), /AR could not start/);
+        if (!config.failRequest) assert.equal(await page.evaluate(() => mockXR.device.ended), true);
+        assert.equal(await page.evaluate(() => mockXR.requests[0].mode), "immersive-ar");
+        assert.equal(await page.locator("#enter-vr").isDisabled(), false);
+      }
+      assert.equal(await page.evaluate(() => document.documentElement.classList.contains("xr-active")), false);
+      await page.locator('[data-shape="2"]').click();
+      assert.equal(await page.locator("#shape-name").textContent(), "Fluted sphere");
+    });
+  }
+});
 
 test("XR renders both eyes with different projections, world placement and one upload per frame", async () => {
   await withXR({}, async page => {
@@ -271,28 +514,30 @@ test("capability changes do not disable Exit VR for an active session", async ()
   });
 });
 
-test("Angular iframe delegates spatial tracking and can start stereo VR", {
-  skip: !process.env.ORBIT_TEST_ROOT
-}, async () => {
-  await withXR({}, async page => {
-    await page.goto(origin + "/orbit");
-    const iframe = page.locator("iframe.orbit-frame");
-    await iframe.waitFor();
-    assert.match(await iframe.getAttribute("allow"), /xr-spatial-tracking/);
-    await page.frameLocator("iframe.orbit-frame").locator("#enter-vr").waitFor();
-    const child = page.frames().find(frame => frame.url().includes("/assets/orbit/index.html"));
-    await child.waitForFunction(() => !document.getElementById("enter-vr").disabled);
-    await child.locator("#enter-vr").click();
-    await child.waitForFunction(() => document.documentElement.classList.contains("vr-active"));
-    const output = await child.evaluate(() => { mockXR.device.step(100); return mockXR.device.pixels(); });
-    assert.equal(output.error, 0);
-    assert.ok(output.counts.every(count => count > 5000));
-    await child.locator("#enter-vr").click();
-    await child.waitForFunction(() => !document.documentElement.classList.contains("vr-active"));
-    await page.getByRole("link", { name: "Back to home" }).click();
-    await page.waitForURL(origin + "/");
+for (const mode of ["vr", "ar"]) {
+  test(`Angular iframe delegates spatial tracking and can start stereo ${mode.toUpperCase()}`, {
+    skip: !process.env.ORBIT_TEST_ROOT
+  }, async () => {
+    await withXR({}, async page => {
+      await page.goto(origin + "/orbit");
+      const iframe = page.locator("iframe.orbit-frame");
+      await iframe.waitFor();
+      assert.match(await iframe.getAttribute("allow"), /xr-spatial-tracking/);
+      await page.frameLocator("iframe.orbit-frame").locator("#enter-" + mode).waitFor();
+      const child = page.frames().find(frame => frame.url().includes("/assets/orbit/index.html"));
+      await child.waitForFunction(value => !document.getElementById("enter-" + value).disabled, mode);
+      await child.locator("#enter-" + mode).click();
+      await child.waitForFunction(value => document.documentElement.classList.contains(value + "-active"), mode);
+      const output = await child.evaluate(() => { mockXR.device.step(100); return mockXR.device.pixels(); });
+      assert.equal(output.error, 0);
+      assert.ok(output.counts.every(count => count > 5000));
+      await child.locator("#enter-" + mode).click();
+      await child.waitForFunction(() => !document.documentElement.classList.contains("xr-active"));
+      await page.getByRole("link", { name: "Back to home" }).click();
+      await page.waitForURL(origin + "/");
+    });
   });
-});
+}
 
 for (const config of [{ supported: false }, { failRequest: true }, { failSetup: true }]) {
   test(`XR fallback keeps ordinary Orbit usable: ${JSON.stringify(config)}`, async () => {
