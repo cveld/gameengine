@@ -4,7 +4,7 @@ module.exports = function installMockXR(config = {}) {
   const state = {
     supported: config.supported !== false, arSupported: config.arSupported !== false,
     requests: [], sessions: [], draws: [], layerOptions: [],
-    uploads: 0, viewports: [], matrices: [], positions: [], spaces: [],
+    uploads: 0, viewports: [], matrices: [], positions: [], spaces: [], pulses: [],
     failRequest: Boolean(config.failRequest), failSetup: Boolean(config.failSetup),
     failFloor: Boolean(config.failFloor), missingPose: false, device: null
   };
@@ -40,6 +40,24 @@ module.exports = function installMockXR(config = {}) {
     state.viewports.push(args);
     return viewport.apply(this, args);
   };
+  const scalar = WebGLRenderingContext.prototype.uniform1f;
+  WebGLRenderingContext.prototype.uniform1f = function (location, value) {
+    if (names.get(location) === "uPulse") state.pulses.push(value);
+    return scalar.call(this, location, value);
+  };
+  if (config.watchdogMs) {
+    const timeout = globalThis.setTimeout;
+    globalThis.setTimeout = (callback, delay, ...args) =>
+      timeout(callback, delay === 8000 ? config.watchdogMs : delay, ...args);
+  }
+  const framebufferStatus = WebGLRenderingContext.prototype.checkFramebufferStatus;
+  WebGLRenderingContext.prototype.checkFramebufferStatus = function (target) {
+    if (config.incompleteFramebuffer && state.device?.renderState.baseLayer &&
+        this.getParameter(this.FRAMEBUFFER_BINDING) === state.device.renderState.baseLayer.framebuffer) {
+      return this.FRAMEBUFFER_UNSUPPORTED;
+    }
+    return framebufferStatus.call(this, target);
+  };
   WebGLRenderingContext.prototype.makeXRCompatible = async function () {
     if (state.failSetup) throw new Error("Synthetic compatibility failure");
     if (config.deferCompatibility) await new Promise(resolve => { state.finishCompatibility = resolve; });
@@ -48,6 +66,7 @@ module.exports = function installMockXR(config = {}) {
   class MockLayer {
     constructor(session, gl, options) {
       state.layerOptions.push(options);
+      if (config.requireRGBA && !options.alpha) throw new Error("Synthetic RGB layer failure");
       this.framebufferWidth = 1024;
       this.framebufferHeight = 512;
       this.framebuffer = gl.createFramebuffer();

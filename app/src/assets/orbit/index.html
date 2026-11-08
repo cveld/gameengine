@@ -9,6 +9,7 @@
   <script src="geometry.js" defer></script>
   <script src="xr-math.js" defer></script>
   <script src="xr.js" defer></script>
+  <script src="sound.js" defer></script>
   <script src="orbit.js" defer></script>
 </head>
 <body>
@@ -18,6 +19,7 @@
       <div class="header-actions">
         <button id="enter-vr" class="quiet" aria-pressed="false" aria-describedby="vr-status" disabled>Enter VR</button>
         <button id="enter-ar" class="quiet" aria-pressed="false" aria-describedby="ar-status" title="Passthrough AR: a floating sculpture in your room. Clear space before walking around it." disabled>Enter AR</button>
+        <button id="sound" class="quiet" aria-pressed="false" aria-describedby="sound-status" title="Enable a quiet synthesized spatial soundscape. Click the right thumbstick in XR to mute.">Sound off</button>
         <button id="fullscreen" class="quiet" aria-pressed="false" aria-describedby="fullscreen-status" title="Immersive fullscreen. Tap the sculpture to show controls.">Fullscreen</button>
         <button id="hide-controls" class="quiet">Hide controls</button>
         <button id="help" class="quiet" aria-haspopup="dialog">Shortcuts <kbd>?</kbd></button>
@@ -25,6 +27,7 @@
       <p id="fullscreen-status" class="fullscreen-status" role="status" hidden></p>
       <p id="vr-status" class="fullscreen-status" role="status" hidden></p>
       <p id="ar-status" class="fullscreen-status" role="status" hidden></p>
+      <p id="sound-status" class="fullscreen-status" role="status" hidden></p>
     </header>
     <section class="stage" aria-label="Sculpture viewer">
       <div class="halo" aria-hidden="true"></div>
@@ -45,6 +48,7 @@
         <label class="slider">Tempo <input id="tempo" type="range" min="0.1" max="2" step="0.05" value="1"><output id="tempo-value" for="tempo">1.00×</output></label>
         <label class="slider">Zoom <input id="zoom" type="range" min="0.55" max="4" step="0.01" value="1"><output id="zoom-value" for="zoom">1.00×</output></label>
         <label class="toggle"><input id="wireframe" type="checkbox"> Wireframe</label>
+        <label class="toggle"><input id="pulse" type="checkbox" checked> Pulse</label>
         <label class="toggle"><input id="rain" type="checkbox" checked> Rain</label>
         <button id="reset" class="quiet">Reset</button>
       </div>
@@ -68,6 +72,8 @@
       <dt>VR / AR grip</dt><dd>Choose the next sculpture</dd>
       <dt>VR left thumbstick</dt><dd>Bring the sculpture closer / further away</dd>
       <dt>Right thumbstick</dt><dd>Rotate the sculpture</dd>
+      <dt>Right thumbstick click</dt><dd>Toggle the spatial soundscape in VR / AR</dd>
+      <dt>Sound / Pulse</dt><dd>Enable quiet ambient sound or gentle breathing geometry; pause stops both</dd>
       <dt>Headset system menu</dt><dd>Exit VR / AR and return to the browser</dd>
       <dt>AR mode</dt><dd>See your room and physically walk around the fixed floating sculpture</dd>
       <dt>AR left thumbstick</dt><dd>Move the sculpture left/right and forward/back relative to your horizontal gaze; release to keep its new position</dd>

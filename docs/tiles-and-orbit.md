@@ -99,6 +99,8 @@ Assets are self-contained under `app/src/assets/orbit`:
   WebXR rendering and controller input.
 - `xr-math.js`: tested column-major matrix composition and world-locked
   sculpture placement.
+- `sound.js`: gentle breathing-pulse envelope and locally synthesized spatial
+  ambience, with opt-in playback, lifecycle cleanup and no audio downloads.
 - `LICENSE`: the original Orbit MIT license and copyright attribution.
 
 There are no CDN imports, new application dependencies, telemetry, persistence,
@@ -133,6 +135,31 @@ text; a rejected request leaves Orbit usable and displays a status message.
 The iframe already grants `allow="fullscreen"`.
 
 ### WebXR / Quest
+
+#### Quest feedback and VR compatibility mitigation
+
+On November 8, 2026 the user reported that AR works on a physical Quest and
+looks good, but entering VR produces a black screen. This supersedes the
+earlier statement that no on-device feedback was available. The agent does
+not have that headset; the exact VR failure has not been reproduced locally.
+
+The shared WebGL context creation and AR layer settings are preserved.
+VR uses an alpha-capable RGBA layer like the working AR path, but explicitly
+clears it with opaque alpha. VR disables optional layer MSAA and compositor
+depth consumption; depth testing of the actual sculpture remains enabled.
+AR keeps its transparent background and antialiased layer. The flat renderer's
+blend/depth state is restored on XR exit.
+
+These are compatibility mitigations, **not a confirmed diagnosis or confirmed
+Quest VR fix**. Synthetic tests cannot reproduce every headset compositor/GPU
+behavior. Initial framebuffer completeness and WebGL error checks now report
+failures and return to the browser. After layer/reference-space setup, if a
+visible session never receives a renderable frame, an eight-second watchdog exits
+with a tracking/retry message. Hidden/blurred permission or system UI does not
+trigger that timeout.
+Setup/render diagnostics are shown below the relevant entry button and also
+logged to the browser console. Retest Enter VR on the Quest; if it still fails,
+the returned message can guide the next investigation.
 
 Use the asset directly in the Quest browser:
 
@@ -181,9 +208,56 @@ distance adjustment instead.
 Sources used for API implementation: the Immersive Web Working Group's
 `webxr-samples` immersive-vr-session and input-tracking examples.
 Validation uses synthetic XR sessions with actual WebGL shader/framebuffer
-rendering; **no physical Quest or real headset compositor has been tested**.
-Quest controller mappings, comfort, performance and permissions still need an
+rendering. The user has now reported successful physical Quest AR, but
+**the updated VR path has not been verified on a physical headset**.
+Controller mappings, comfort, performance and the new sound still need an
 on-device check.
+
+### Breathing pulse and spatial sound
+
+**Pulse** gently scales the sculpture around its fixed anchor (at most +/-7.3%)
+and modulates its lighting. It uses the shared animation time, so Tempo changes
+its pace and Pause freezes it. Reduced-motion preference disables Pulse by
+default and starts paused; the checkbox can explicitly enable it.
+There is no strobe or camera movement. The same effect works in flat, VR and AR.
+
+**Sound off/on** opts into quiet synthesized ambience: detuned triangle/sine
+voices, a low-pass filter, slowly changing chords and a soft echo. No external
+music files, CDN, network calls or new dependencies are used. The envelope
+follows the same breathing clock; pauses and hidden/blurred/tracking-lost sessions
+fade to silence. With Pulse disabled, ambience has steady volume. Browser/headset
+volume still determines actual loudness.
+
+In XR, an HRTF panner follows the sculpture's reference-space position, including
+AR placement changes, while the listener follows headset position/orientation.
+Click the **right thumbstick** to toggle sound without an HTML panel; holding
+the click toggles only once. Enter XR unlocks an initially silent audio graph
+from the entry gesture, so sound can later be enabled using the controller.
+Sound is off until the user opts in. Missing/denied audio reports a retry hint
+without preventing graphics or XR entry. Contexts/nodes are released on page exit.
+
+API references: the Immersive Web Working Group's `webxr` and
+`webxr-gamepads-module` specifications, and the W3C `web-audio-api` specification.
+
+Validation for the pulse/sound and VR compatibility changes on November 8, 2026:
+
+- 29 flat-browser checks, 29 synthetic XR checks, 6 geometry tests, 6 XR math
+  tests and 4 sound lifecycle/pulse tests passed, including a targeted rerun of
+  the expanded phone iframe height check (74 individual checks total).
+- Real WebGL framebuffers verify stereo geometry, opaque VR/wireframe coverage,
+  transparent AR, pulse freeze and renderer recovery. Real OfflineAudioContext
+  rendering verifies nonempty, bounded synthesized samples and muted silence.
+  Synthetic audio tests cover spatial positions, controller mute, pause/visibility,
+  denied/missing audio and retry after partial initialization.
+- Flat-browser tests use deterministic unsupported-XR availability rather than
+  the host headset service, and wait for capability-message layout before taking
+  snapshots. Touch tests target canvas bounds, not a hard-coded screen position.
+  The phone iframe height guard now allows up to 1200 pixels for the added controls;
+  exact content/iframe height agreement and no nested/horizontal scrolling remain
+  required.
+- Updated static assets were copied into the previously built Angular app.
+  No new Angular build, application dependencies or lockfile changes were needed.
+  These tests do not confirm that the reported physical Quest VR fault is fixed.
 
 ### Passthrough AR / walk-around sculpture
 
@@ -228,8 +302,9 @@ reset re-centers placement; merely walking/turning does not. Starting AR again
 places the object ahead of the current initial gaze.
 
 Clear a safe area before entering AR. The app cannot detect obstacles; use the
-headset's boundary and avoid walking into furniture. Passthrough appearance,
-AR permissions and tracking on a physical Quest still need an on-device check.
+headset's boundary and avoid walking into furniture. The user has reported
+successful Quest AR. New controls, sound, tracking accuracy
+and the updated VR path still require additional on-device checks.
 
 AR implementation follows the Immersive Web Working Group's
 `webxr-samples/immersive-ar-session.html` example. Synthetic tests verify
@@ -328,6 +403,7 @@ Run from the repository root with a recent Node runtime (tested with Node 24):
 ```powershell
 node --test app/tests/orbit-geometry.test.cjs
 node --test app/tests/orbit-xr-math.test.cjs
+node --test app/tests/orbit-sound.test.cjs
 ```
 
 The optional browser smoke suite uses an existing Playwright installation,

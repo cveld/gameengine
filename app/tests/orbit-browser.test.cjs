@@ -42,11 +42,24 @@ async function withPage(options, run) {
   const page = await context.newPage();
   page.on("pageerror", error => errors.push(error.message));
   try {
+    // Flat-view regressions must not depend on the host's headset service.
+    // Immersive capability/session behavior is covered in orbit-xr.test.cjs.
+    await page.addInitScript(() => {
+      const xr = new EventTarget();
+      xr.isSessionSupported = async () => false;
+      Object.defineProperty(navigator, "xr", { configurable: true, value: xr });
+    });
     await page.goto(origin + "/assets/orbit/index.html");
     await page.waitForFunction(() => {
       const canvas = document.getElementById("scene");
       return canvas && canvas.width > 300 && document.getElementById("status").hidden;
     });
+    // Capability messages can add rows and a scrollbar after the first paint.
+    // Compare images only after that asynchronous layout has settled.
+    await page.waitForFunction(() => ["vr", "ar"].every(mode =>
+      !document.getElementById("enter-" + mode).disabled ||
+      document.getElementById(mode + "-status").textContent.length > 0));
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await run(page);
   } finally {
     await context.close();
@@ -56,6 +69,53 @@ async function withPage(options, run) {
 const screenshot = page => page.locator("#scene").screenshot();
 const sameImage = (actual, expected, message = "Rendered images should match") => assert.ok(actual.equals(expected), message);
 const differentImage = (actual, expected, message = "Rendered images should differ") => assert.ok(!actual.equals(expected), message);
+
+test("pulse respects reduced motion and sound is opt-in with a usable mute control", async () => {
+  await withPage({}, async page => {
+    assert.equal(await page.locator("#pulse").isChecked(), false);
+    assert.equal(await page.locator("#sound").textContent(), "Sound off");
+    await page.locator("#sound").click();
+    assert.equal(await page.locator("#sound").getAttribute("aria-pressed"), "true");
+    await page.locator("#sound").click();
+    assert.equal(await page.locator("#sound").getAttribute("aria-pressed"), "false");
+    await page.locator("#pulse").check();
+    await page.locator("#play").click();
+    await page.waitForTimeout(200);
+    await page.locator("#play").click();
+    const frozen = await screenshot(page);
+    await page.waitForTimeout(100);
+    sameImage(await screenshot(page), frozen);
+    await page.locator("#pulse").uncheck();
+    differentImage(await screenshot(page), frozen);
+  });
+});
+
+test("the synthesized soundscape produces bounded nonempty audio and silence when muted", async () => {
+  await withPage({}, async page => {
+    const result = await page.evaluate(async () => {
+      async function render(enabled) {
+        const original = window.AudioContext;
+        const offline = new OfflineAudioContext(2, 24000, 48000);
+        Object.defineProperty(offline, "state", { get: () => "running" });
+        offline.resume = async () => {};
+        window.AudioContext = function () { return offline; };
+        const sound = OrbitSound.create();
+        window.AudioContext = original;
+        await sound.unlock();
+        sound.setEnabled(enabled); sound.setActive(true);
+        sound.update(0.3, 0, true);
+        const output = await offline.startRendering();
+        let peak = 0, energy = 0;
+        for (const value of output.getChannelData(0)) { peak = Math.max(peak, Math.abs(value)); energy += value * value; }
+        return { peak, rms: Math.sqrt(energy / output.length) };
+      }
+      return { audible: await render(true), muted: await render(false) };
+    });
+    assert.ok(result.audible.rms > 0.001, JSON.stringify(result));
+    assert.ok(result.audible.peak < 0.15, "Keep generated audio comfortably bounded");
+    assert.equal(result.muted.peak, 0);
+  });
+});
 
 async function visualDifference(page, a, b) {
   return page.evaluate(async ([first, second]) => {
@@ -202,8 +262,10 @@ test("mobile layout fits and touch can orbit the sculpture", async () => {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     const initial = await screenshot(page);
     const session = await page.context().newCDPSession(page);
-    await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 150, y: 180 }] });
-    await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: 210, y: 210 }] });
+    const box = await page.locator("#scene").boundingBox();
+    const x = box.x + box.width * 0.4, y = box.y + box.height * 0.4;
+    await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x + 60, y: y + 30 }] });
     await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     await session.detach();
     differentImage(await screenshot(page), initial);
@@ -289,7 +351,8 @@ test("embedded mobile viewer auto-sizes without nested scrolling after rotation"
       });
       assert.equal(dimensions.outerOverflow, false);
       assert.equal(dimensions.innerOverflow, false);
-      assert.ok(dimensions.frameHeight >= 400 && dimensions.frameHeight < 1000);
+      // Sound/Pulse add content rows on phones; retain a bounded natural height.
+      assert.ok(dimensions.frameHeight >= 400 && dimensions.frameHeight < 1200, JSON.stringify(dimensions));
       const footer = page.frameLocator("iframe.orbit-frame").getByRole("link", { name: "MIT license" });
       await footer.scrollIntoViewIfNeeded();
       const back = page.getByRole("link", { name: "Back to home" });

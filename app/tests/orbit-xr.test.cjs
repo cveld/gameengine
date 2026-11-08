@@ -4,6 +4,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const installMockXR = require("./helpers/mock-xr.cjs");
+const installMockAudio = require("./helpers/mock-audio.cjs");
 const { chromium } = require(process.env.ORBIT_PLAYWRIGHT_MODULE || "playwright");
 const root = path.resolve(process.env.ORBIT_TEST_ROOT || path.join(__dirname, "../src"));
 let browser, server, origin;
@@ -35,6 +36,7 @@ async function withXR(config, run) {
   page.on("pageerror", error => errors.push(error.message));
   try {
     await page.addInitScript(installMockXR, config);
+    if (config.mockAudio) await page.addInitScript(installMockAudio);
     await page.goto(origin + "/assets/orbit/index.html");
     await page.waitForFunction(() => document.getElementById("scene").width > 300 && document.getElementById("status").hidden);
     if (config.supported !== false) await page.waitForFunction(() => !document.getElementById("enter-vr").disabled);
@@ -50,6 +52,112 @@ async function start(page, mode = "vr") {
   await page.locator("#enter-" + mode).click();
   await page.waitForFunction(value => document.documentElement.classList.contains(value + "-active"), mode);
 }
+
+test("VR uses an RGBA layer without optional MSAA/compositor depth and draws opaque stereo output", async () => {
+  await withXR({ requireRGBA: true }, async page => {
+    await start(page);
+    const result = await page.evaluate(() => {
+      mockXR.device.step(100);
+      return { options: mockXR.layerOptions[0], pixels: mockXR.device.pixels() };
+    });
+    assert.equal(result.options.alpha, true);
+    assert.equal(result.options.antialias, false);
+    assert.equal(result.options.ignoreDepthValues, true);
+    assert.deepEqual(result.pixels.transparent, [0, 0]);
+    assert.ok(result.pixels.counts.every(count => count > 5000));
+    assert.equal(result.pixels.error, 0);
+    await page.locator("#wireframe").check();
+    const wire = await page.evaluate(() => { mockXR.device.step(200); return mockXR.device.pixels(); });
+    assert.deepEqual(wire.opaque, [512 * 512, 512 * 512], "VR wireframe must also retain opaque background alpha");
+    assert.ok(wire.counts.every(count => count > 1000));
+  });
+});
+
+test("VR framebuffer failure returns to the browser with an actionable diagnostic", async () => {
+  await withXR({ incompleteFramebuffer: true }, async page => {
+    await start(page);
+    await page.evaluate(() => mockXR.device.step(100));
+    await page.waitForFunction(() => mockXR.device.ended);
+    assert.match(await page.locator("#vr-status").textContent(), /framebuffer is incomplete/);
+    assert.equal(await page.locator("#enter-vr").textContent(), "Enter VR");
+    assert.equal(await page.locator("#play").isDisabled(), false);
+    assert.equal(await page.evaluate(() => mockXR.device.callbacks.size), 0);
+  });
+});
+
+test("VR startup without a renderable frame does not leave an indefinite black session", async () => {
+  await withXR({ watchdogMs: 500 }, async page => {
+    await start(page);
+    await page.waitForFunction(() => mockXR.device.ended);
+    assert.match(await page.locator("#vr-status").textContent(), /renderable headset frame/);
+    assert.equal(await page.locator("#enter-vr").isDisabled(), false);
+  });
+});
+
+test("XR pulse breathes around the fixed anchor and freezes with pause", async () => {
+  await withXR({}, async page => {
+    await page.locator("#pulse").check();
+    await page.locator("#play").click();
+    await start(page, "ar");
+    const before = await page.evaluate(() => {
+      mockXR.device.step(0);
+      const anchor = mockXR.positions.at(-1);
+      mockXR.device.step(300);
+      return { anchor, pulse: mockXR.pulses.at(-1) };
+    });
+    await page.locator("#play").click();
+    const after = await page.evaluate(() => {
+      mockXR.device.step(400, 0.2);
+      return { anchor: mockXR.positions.at(-1), pulse: mockXR.pulses.at(-1) };
+    });
+    assert.deepEqual(after.anchor, before.anchor);
+    assert.equal(after.pulse, before.pulse);
+    assert.ok(after.pulse >= 0.927 && after.pulse <= 1.073);
+    await page.locator("#pulse").uncheck();
+    const off = await page.evaluate(() => { mockXR.device.step(500); return mockXR.pulses.at(-1); });
+    assert.equal(off, 1);
+  });
+});
+
+test("XR spatial sound follows the sculpture; thumbstick click toggles once and visibility mutes", async () => {
+  await withXR({ mockAudio: true }, async page => {
+    assert.equal(await page.locator("#sound").textContent(), "Sound off");
+    await page.locator("#sound").click();
+    await page.locator("#play").click();
+    await start(page, "ar");
+    const output = await page.evaluate(() => {
+      const device = mockXR.device, context = mockAudio.contexts[0];
+      device.step(0, 0.4, 1.7);
+      const master = context.nodes[0], panner = context.nodes[1];
+      const initial = { level: master.gain.value, source: [panner.positionX.value, panner.positionY.value, panner.positionZ.value],
+        anchor: mockXR.positions.at(-1), listener: [context.listener.positionX.value, context.listener.positionY.value] };
+      const controller = { handedness: "right", gamepad: { mapping: "xr-standard", axes: [0, 0, 0, 0],
+        buttons: [{ pressed: false }, {}, {}, { pressed: true }] } };
+      device.inputSources = [controller];
+      device.step(100);
+      const muted = document.getElementById("sound").textContent;
+      device.step(200);
+      const held = document.getElementById("sound").textContent;
+      controller.gamepad.buttons[3].pressed = false; device.step(300);
+      controller.gamepad.buttons[3].pressed = true; device.step(400);
+      const unmuted = document.getElementById("sound").textContent;
+      device.visibilityState = "hidden"; device.dispatchEvent(new Event("visibilitychange"));
+      const hiddenLevel = master.gain.value;
+      device.visibilityState = "visible"; device.dispatchEvent(new Event("visibilitychange"));
+      device.step(10000);
+      return { initial, muted, held, unmuted, hiddenLevel,
+        resumed: document.getElementById("sound").textContent };
+    });
+    assert.ok(output.initial.level > 0);
+    assert.deepEqual(output.initial.source, output.initial.anchor);
+    assert.deepEqual(output.initial.listener, [0.4, 1.7]);
+    assert.equal(output.muted, "Sound off");
+    assert.equal(output.held, "Sound off");
+    assert.equal(output.unmuted, "Sound on");
+    assert.equal(output.hiddenLevel, 0);
+    assert.equal(output.resumed, "Sound on", "A held click after focus returns must not toggle again");
+  });
+});
 
 test("AR uses passthrough transparency with stereo opaque sculpture geometry", async () => {
   await withXR({}, async page => {

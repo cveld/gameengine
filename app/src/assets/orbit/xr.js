@@ -12,7 +12,26 @@
     const viewProjection = new Float32Array(16), sculpturePosition = new Float32Array(3);
     const arOffset = new Float32Array(3);
     const nearDistance = 0.85, farDistance = 4.5;
+    let firstFrame = true, startupWatchdog = null;
+    const mutePressed = new Set();
 
+    function diagnose(text, error) {
+      console.warn("Orbit XR:", text, error || "");
+      message(text + (error ? " (" + String(error.message || error).slice(0, 160) + ")" : ""));
+    }
+    function clearWatchdog() {
+      if (startupWatchdog !== null) clearTimeout(startupWatchdog);
+      startupWatchdog = null;
+    }
+    function watchStartup(starting) {
+      clearWatchdog();
+      startupWatchdog = setTimeout(() => {
+        if (session !== starting || !firstFrame || disposed) return;
+        if (session.visibilityState !== "visible") { watchStartup(starting); return; }
+        diagnose(entries[mode].label + " did not receive a renderable headset frame. Check tracking and retry.");
+        void end();
+      }, 8000);
+    }
     function message(text, targetMode = mode) {
       const status = entries[targetMode]?.status;
       if (status) { status.textContent = text || ""; status.hidden = !text; }
@@ -50,6 +69,7 @@
     function cleanup(endedSession) {
       if (session !== endedSession) return;
       const button = entries[mode].button;
+      clearWatchdog(); mutePressed.clear();
       if (frameRequest !== null) session.cancelAnimationFrame(frameRequest);
       frameRequest = null;
       if (space) space.removeEventListener("reset", recenter);
@@ -65,6 +85,7 @@
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.clearColor(0, 0, 0, 0);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.depthFunc(gl.LESS);
       }
       document.documentElement.classList.remove("xr-active", "vr-active", "ar-active");
       options.onEnd();
@@ -81,7 +102,10 @@
       if (ready && session.visibilityState === "visible") options.onSqueeze();
     }
     function recenter() { anchor = null; distance = 1.8; previous = null; arOffset.fill(0); }
-    function onVisibility() { previous = null; }
+    function onVisibility() {
+      previous = null; mutePressed.clear();
+      options.onVisibility?.(session.visibilityState === "visible");
+    }
     async function end() {
       const ending = session;
       if (!ending) return;
@@ -107,6 +131,8 @@
       pending = true; mode = requestedMode; sync(); message("");
       let starting = null;
       try {
+        // Audio resume is initiated by this click, but never awaited before XR.
+        options.onRequest?.();
         // requestSession must run directly from the user's click, before any
         // awaits that could consume transient user activation.
         starting = await navigator.xr.requestSession(requestedMode, { optionalFeatures: ["local-floor"] });
@@ -124,7 +150,10 @@
           throw new Error("This AR session cannot display the real environment");
         }
         layer = new XRWebGLLayer(session, gl, {
-          alpha: requestedMode === "immersive-ar", depth: true, antialias: true, framebufferScaleFactor: 1
+          // Keep an RGBA layer in both modes (the AR path tested on Quest).
+          // VR clears opaque alpha; avoid optional MSAA/depth-compositor paths.
+          alpha: true, depth: true, antialias: requestedMode === "immersive-ar",
+          ignoreDepthValues: requestedMode === "immersive-vr", framebufferScaleFactor: 1
         });
         session.updateRenderState({ baseLayer: layer, depthNear: 0.05, depthFar: 30 });
         try { space = await starting.requestReferenceSpace("local-floor"); }
@@ -137,13 +166,17 @@
         session.addEventListener("select", select);
         session.addEventListener("squeeze", squeeze);
         anchor = null; distance = 1.8; previous = null; ready = true; arOffset.fill(0);
+        firstFrame = true; mutePressed.clear(); watchStartup(starting);
         document.documentElement.classList.add("xr-active", requestedMode === "immersive-ar" ? "ar-active" : "vr-active");
         frameRequest = session.requestAnimationFrame(onFrame);
       } catch (error) {
+        const detail = String(error.message || error).slice(0, 160);
+        console.warn("Orbit XR session setup failed:", requestedMode, error);
         if (starting && session === starting) await end();
         if (!session) mode = null;
         if (!disposed) message(entries[requestedMode].label +
-          " could not start. Allow headset access, close other XR sessions and check this mode is supported.", requestedMode);
+          " could not start. Allow headset access, close other XR sessions and check this mode is supported. (" +
+          detail + ")", requestedMode);
       } finally {
         pending = false;
         sync();
@@ -154,11 +187,15 @@
       frameRequest = session.requestAnimationFrame(onFrame);
       if (session.visibilityState !== "visible" || !options.available()) {
         previous = null;
+        options.onVisibility?.(false);
         return;
       }
       try {
         const pose = frame.getViewerPose(space);
-        if (!pose) { previous = null; return; }
+        if (!pose || !pose.views.length) {
+          previous = null; options.onVisibility?.(false);
+          return;
+        }
         const dt = previous === null ? 0 : Math.min(0.1, Math.max(0, (timestamp - previous) / 1000));
         previous = timestamp;
         if (!anchor) anchor = OrbitXRMath.anchorFromPose(pose.transform.matrix);
@@ -182,36 +219,61 @@
               x, heightMode ? 0 : y, heightMode ? y : 0, dt);
           }
           if (input.handedness === "right") { yaw = axis(2) * dt * 1.5; pitch = axis(3) * dt * 1.5; }
+          if (input.handedness === "right") {
+            const pressed = gamepad.buttons?.[3]?.pressed === true;
+            if (pressed && !mutePressed.has(input) && dt > 0) options.onMute?.();
+            if (pressed) mutePressed.add(input); else mutePressed.delete(input);
+          }
         }
+        const activeInputs = new Set(session.inputSources);
+        for (const input of mutePressed) if (!activeInputs.has(input)) mutePressed.delete(input);
         OrbitXRMath.position(anchor, distance, sculpturePosition);
         if (mode === "immersive-ar") {
           for (let i = 0; i < 3; i++) sculpturePosition[i] += arOffset[i];
         }
         // Advance animation and upload geometry once, not once per eye.
         options.prepareFrame(dt, yaw, pitch);
+        options.onPose?.(pose.transform.matrix, sculpturePosition);
         const gl = options.getGL();
         gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
         gl.disable(gl.SCISSOR_TEST);
+        gl.colorMask(true, true, true, true);
         gl.depthMask(true);
+        gl.clearDepth(1);
+        gl.depthFunc(gl.LEQUAL);
+        if (firstFrame && gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+          throw new Error("XR framebuffer is incomplete");
+        }
         if (mode === "immersive-ar") {
           // Transparent pixels let the headset compositor show passthrough.
           // Separate alpha blending preserves correct coverage for wireframe.
           gl.clearColor(0, 0, 0, 0);
           gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         } else {
-          gl.clearColor(0.043, 0.063, 0.125, 1);
+          gl.clearColor(0.065, 0.085, 0.16, 1);
+          // Preserve opaque coverage even when drawing translucent wire lines.
+          gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         }
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        let viewsDrawn = 0;
         for (const view of pose.views) {
           const viewport = layer.getViewport(view);
           if (!viewport) continue;
           gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
           OrbitXRMath.multiply(view.projectionMatrix, view.transform.inverse.matrix, viewProjection);
           options.drawView(viewProjection, sculpturePosition, view.transform.position);
+          viewsDrawn++;
+        }
+        if (firstFrame) {
+          if (!viewsDrawn) throw new Error("No XR eye viewport is available");
+          const error = gl.getError();
+          if (error !== gl.NO_ERROR) throw new Error("WebGL error 0x" + error.toString(16));
+          firstFrame = false;
+          clearWatchdog();
         }
       } catch (error) {
         ready = false;
-        message(entries[mode].label + " rendering stopped. Exit XR and try again.");
+        diagnose(entries[mode].label + " rendering stopped. Returning to the browser.", error);
         void end();
       }
     }

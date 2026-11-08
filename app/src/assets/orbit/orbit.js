@@ -1,4 +1,4 @@
-/* global OrbitGeometry, OrbitXR */
+/* global OrbitGeometry, OrbitXR, OrbitSound */
 (function () {
   "use strict";
   const canvas = document.getElementById("scene");
@@ -10,6 +10,10 @@
   const minZoom = Number(zoom.min), maxZoom = Number(zoom.max);
   const wireframe = document.getElementById("wireframe");
   const rain = document.getElementById("rain");
+  const pulseControl = document.getElementById("pulse");
+  const soundButton = document.getElementById("sound");
+  const soundStatus = document.getElementById("sound-status");
+  let sound = null;
   const dialog = document.getElementById("shortcuts");
   const fullscreenButton = document.getElementById("fullscreen");
   const fullscreenStatus = document.getElementById("fullscreen-status");
@@ -22,7 +26,7 @@
   const state = {
     shape: 0, time: 0, speed: 1, zoom: 1, yaw: 0, pitch: -0.2,
     playing: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    wireframe: false, rain: true
+    wireframe: false, rain: true, pulse: !window.matchMedia("(prefers-reduced-motion: reduce)").matches
   };
   let gl, sculpture, atmosphere, geometryBuffer, atmosphereBuffer;
   let xr = null, uploadedTime = NaN, uploadedWireframe = null;
@@ -44,6 +48,7 @@
     uniform bool uXR;
     uniform mat4 uViewProjection;
     uniform mediump vec3 uXRPosition;
+    uniform mediump float uPulse;
     varying vec3 vNormal;
     varying vec3 vPosition;
     varying vec2 vMaterial;
@@ -56,7 +61,7 @@
       return vec3(p.x, c*p.y-s*p.z, s*p.y+c*p.z);
     }
     void main() {
-      vec3 p = rotate(aPosition);
+      vec3 p = rotate(aPosition) * uPulse;
       if (uXR) {
         // WebXR reference-space coordinates are in meters, not screen pixels.
         gl_Position = uViewProjection * vec4(p*0.30+uXRPosition, 1.0);
@@ -75,6 +80,7 @@
     uniform bool uXR;
     uniform vec3 uEyePosition;
     uniform vec3 uXRPosition;
+    uniform float uPulse;
     varying vec3 vNormal;
     varying vec3 vPosition;
     varying vec2 vMaterial;
@@ -94,7 +100,7 @@
       base = mix(base, vec3(0.914,0.937,1.0), vMaterial.y*0.20);
       float brightness = 0.24+0.66*diffuse+specular;
       vec3 color = brightness > 1.0 ? mix(base, vec3(0.949,0.961,1.0), brightness-1.0) : base*brightness;
-      gl_FragColor = vec4(color, 1.0);
+      gl_FragColor = vec4(color * (1.0 + (uPulse - 1.0) * 1.5), 1.0);
     }`;
   const atmosphereVertex = `
     attribute vec2 aPosition;
@@ -167,7 +173,7 @@
       gl = canvas.getContext("webgl", { alpha: true, antialias: true, premultipliedAlpha: false });
       if (!gl) throw new Error("WebGL is unavailable");
       sculpture = program(sculptureVertex, sculptureFragment, ["aPosition", "aNormal", "aMaterial"],
-        ["uRotation", "uScale", "uTime", "uWireframe", "uXR", "uViewProjection", "uXRPosition", "uEyePosition"]);
+        ["uRotation", "uScale", "uTime", "uWireframe", "uXR", "uViewProjection", "uXRPosition", "uEyePosition", "uPulse"]);
       atmosphere = program(atmosphereVertex, atmosphereFragment, ["aPosition", "aSize", "aColor"], ["uRound"]);
       geometryBuffer = gl.createBuffer();
       atmosphereBuffer = gl.createBuffer();
@@ -312,6 +318,7 @@
     gl.uniform2f(u.uScale, 2.295 * state.zoom * Math.min(width, height) / width,
       2.295 * state.zoom * Math.min(width, height) / height);
     gl.uniform1f(u.uTime, state.time);
+    gl.uniform1f(u.uPulse, OrbitSound.pulse(state.time, state.pulse));
     gl.uniform1i(u.uWireframe, state.wireframe ? 1 : 0);
     gl.uniform1i(u.uXR, viewProjection ? 1 : 0);
     if (viewProjection) {
@@ -329,6 +336,7 @@
   function stopFrame() {
     if (frame !== null) cancelAnimationFrame(frame);
     frame = previousFrame = null;
+    sound?.setActive(false);
   }
   function render(timestamp) {
     frame = null;
@@ -337,6 +345,8 @@
     previousFrame = state.playing ? timestamp : null;
     try {
       draw();
+      sound?.setActive(state.playing && !document.hidden);
+      sound?.update(state.time, state.shape, state.pulse);
       if (state.playing) requestRender();
     } catch (error) {
       failed = true;
@@ -354,6 +364,7 @@
     document.getElementById("zoom-value").textContent = state.zoom.toFixed(2) + "×";
     wireframe.checked = state.wireframe;
     rain.checked = state.rain;
+    pulseControl.checked = state.pulse;
     shapeButtons.forEach(button => button.setAttribute("aria-pressed", String(Number(button.dataset.shape) === state.shape)));
     document.getElementById("shape-name").textContent = shapeNames[state.shape];
   }
@@ -381,6 +392,7 @@
     setShape(0);
     state.time = 0; state.speed = 1; state.wireframe = false; state.rain = true;
     state.playing = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    state.pulse = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     previousFrame = null;
     resetCamera();
   }
@@ -391,6 +403,11 @@
   zoom.addEventListener("input", () => { state.zoom = Number(zoom.value); syncControls(); requestRender(); });
   wireframe.addEventListener("change", () => { state.wireframe = wireframe.checked; requestRender(); });
   rain.addEventListener("change", () => { state.rain = rain.checked; requestRender(); });
+  pulseControl.addEventListener("change", () => { state.pulse = pulseControl.checked; requestRender(); });
+  soundButton.addEventListener("click", () => {
+    sound.toggle();
+    requestRender();
+  });
   document.getElementById("reset").addEventListener("click", reset);
   document.getElementById("help").addEventListener("click", () => dialog.showModal());
   function syncFullscreen() {
@@ -533,10 +550,11 @@
   window.addEventListener("pagehide", () => {
     suspended = true; pointers.clear(); pinch = null; stopFrame();
     if (xr) xr.dispose();
+    sound?.dispose();
     release();
   });
   window.addEventListener("pageshow", event => {
-    if (event.persisted) { suspended = false; initialize(); initializeXR(); }
+    if (event.persisted) { suspended = false; initializeSound(); initialize(); initializeXR(); }
   });
   function reportSize() {
     // Fullscreen has its own viewport; keep the embedded height unchanged until exit.
@@ -557,6 +575,23 @@
   }
   window.addEventListener("load", reportSize);
   reportSize();
+  function initializeSound() {
+    sound = OrbitSound.create({
+      onStatus(text) { soundStatus.textContent = text || ""; soundStatus.hidden = !text; },
+      onChange(enabled) {
+        soundButton.textContent = enabled ? "Sound on" : "Sound off";
+        soundButton.setAttribute("aria-pressed", String(enabled));
+      }
+    });
+    soundButton.disabled = !sound.available;
+    soundButton.textContent = "Sound off";
+    soundButton.setAttribute("aria-pressed", "false");
+    if (!sound.available) {
+      soundStatus.textContent = "Web Audio is unavailable. Orbit still works without sound.";
+      soundStatus.hidden = false;
+    }
+  }
+  initializeSound();
   syncControls();
   initialize();
   function initializeXR() {
@@ -564,7 +599,14 @@
       getGL: () => gl,
       available: () => Boolean(gl && sculpture && !lost && !failed && !suspended),
       onStart() { stopFrame(); pointers.clear(); pinch = null; },
-      onEnd() { previousFrame = null; reportSize(); requestRender(); },
+      onEnd() { sound.setActive(false); previousFrame = null; reportSize(); requestRender(); },
+      onRequest: () => { void sound.unlock(); },
+      onMute: () => sound.toggle(),
+      onVisibility: visible => sound.setActive(visible && state.playing),
+      onPose(pose, position) {
+        sound.setActive(state.playing);
+        sound.update(state.time, state.shape, state.pulse, position, pose);
+      },
       onSelect: togglePlay,
       onSqueeze: () => setShape((state.shape + 1) % 3),
       prepareFrame(dt, yaw, pitch) {
