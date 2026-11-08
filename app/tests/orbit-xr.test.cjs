@@ -55,6 +55,12 @@ async function start(page, mode = "vr") {
 
 test("VR uses an RGBA layer without optional MSAA/compositor depth and draws opaque stereo output", async () => {
   await withXR({ requireRGBA: true }, async page => {
+    const context = await page.evaluate(() => ({
+      request: mockXR.contextRequests[0], webgl2: Boolean(document.getElementById("scene").getContext("webgl2"))
+    }));
+    assert.equal(context.request.type, "webgl2");
+    assert.equal(context.request.attributes.xrCompatible, true);
+    assert.equal(context.webgl2, true);
     await start(page);
     const result = await page.evaluate(() => {
       mockXR.device.step(100);
@@ -73,6 +79,27 @@ test("VR uses an RGBA layer without optional MSAA/compositor depth and draws opa
   });
 });
 
+for (const mode of ["vr", "ar"]) {
+  test(`${mode.toUpperCase()} retains stereo rendering for all sculptures on the WebGL 1 fallback`, async () => {
+    await withXR({ webgl1Only: true }, async page => {
+      assert.equal(await page.evaluate(() => document.getElementById("scene").getContext("webgl2")), null);
+      await start(page, mode);
+      for (const shape of [0, 1, 2]) {
+        await page.locator(`[data-shape="${shape}"]`).click();
+        const pixels = await page.evaluate(() => { mockXR.device.step(100); return mockXR.device.pixels(); });
+        assert.equal(pixels.error, 0);
+        assert.ok(pixels.counts.every(count => count > 5000));
+      }
+      await page.locator("#wireframe").check();
+      const wire = await page.evaluate(() => { mockXR.device.step(200); return mockXR.device.pixels(); });
+      assert.equal(wire.error, 0);
+      assert.ok(wire.counts.every(count => count > 1000));
+      if (mode === "vr") assert.deepEqual(wire.transparent, [0, 0]);
+      else assert.ok(wire.transparent.every(count => count > 10000));
+    });
+  });
+}
+
 test("VR framebuffer failure returns to the browser with an actionable diagnostic", async () => {
   await withXR({ incompleteFramebuffer: true }, async page => {
     await start(page);
@@ -84,6 +111,52 @@ test("VR framebuffer failure returns to the browser with an actionable diagnosti
     assert.equal(await page.evaluate(() => mockXR.device.callbacks.size), 0);
   });
 });
+
+for (const phase of ["geometry upload", "shader uniforms", "drawArrays"]) {
+  test(`XR reports real INVALID_OPERATION at ${phase} rather than an undifferentiated 0x502`, async () => {
+    await withXR({ failPhase: phase }, async page => {
+      await start(page);
+      if (phase === "geometry upload") await page.locator("#wireframe").check();
+      await page.evaluate(() => mockXR.device.step(100));
+      await page.waitForFunction(() => mockXR.device.ended);
+      const status = await page.locator("#vr-status").textContent();
+      assert.match(status, /WebGL 0x502 INVALID_OPERATION/);
+      assert.ok(status.includes("at " + (phase === "geometry upload" ? "" : "left ") + phase), status);
+      assert.equal(await page.evaluate(() => mockXR.device.callbacks.size), 0);
+    });
+  });
+}
+
+test("XR attributes setup errors to compatibility, not the first eye draw", async () => {
+  await withXR({ failPhase: "compatibility" }, async page => {
+    await page.locator("#enter-vr").click();
+    await page.waitForFunction(() => mockXR.device?.ended);
+    assert.match(await page.locator("#vr-status").textContent(),
+      /WebGL 0x502 INVALID_OPERATION at XR compatibility \/ renderer setup/);
+    assert.equal(await page.evaluate(() => mockXR.layerOptions.length), 0);
+  });
+});
+
+for (const mode of ["vr", "ar"]) {
+  test(`${mode.toUpperCase()} survives real context loss/restoration during XR compatibility`, async () => {
+    await withXR({ restoreDuringCompatibility: true }, async page => {
+      await start(page, mode);
+      const output = await page.evaluate(() => {
+        mockXR.device.step(100);
+        return { restored: mockXR.compatibilityRestored, ended: mockXR.device.ended,
+          pixels: mockXR.device.pixels() };
+      });
+      assert.equal(output.restored, true);
+      assert.equal(output.ended, false);
+      assert.equal(output.pixels.error, 0);
+      assert.ok(output.pixels.counts.every(count => count > 5000));
+      await page.locator("#enter-" + mode).click();
+      await page.waitForFunction(() => mockXR.device.ended);
+      assert.equal(await page.locator("#status").isVisible(), false);
+      assert.equal(await page.locator("#play").isDisabled(), false);
+    });
+  });
+}
 
 test("VR startup without a renderable frame does not leave an indefinite black session", async () => {
   await withXR({ watchdogMs: 500 }, async page => {
@@ -595,7 +668,7 @@ test("graphics context loss ends VR and context recovery returns a usable browse
   await withXR({}, async page => {
     await start(page);
     await page.evaluate(() => {
-      window.lostContext = document.getElementById("scene").getContext("webgl").getExtension("WEBGL_lose_context");
+      window.lostContext = (document.getElementById("scene").getContext("webgl2") || document.getElementById("scene").getContext("webgl")).getExtension("WEBGL_lose_context");
       lostContext.loseContext();
     });
     await page.waitForFunction(() => mockXR.device.ended && !document.getElementById("status").hidden);

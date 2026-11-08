@@ -170,7 +170,10 @@
 
   function initialize() {
     try {
-      gl = canvas.getContext("webgl", { alpha: true, antialias: true, premultipliedAlpha: false });
+      // Match the working Immersive Web samples' WebGL 2 / XR-ready context.
+      // Our GLSL ES 1.00 shaders are also supported by WebGL 2.
+      const attributes = { alpha: true, antialias: true, premultipliedAlpha: false, xrCompatible: true };
+      gl = canvas.getContext("webgl2", attributes) || canvas.getContext("webgl", attributes);
       if (!gl) throw new Error("WebGL is unavailable");
       sculpture = program(sculptureVertex, sculptureFragment, ["aPosition", "aNormal", "aMaterial"],
         ["uRotation", "uScale", "uTime", "uWireframe", "uXR", "uViewProjection", "uXRPosition", "uEyePosition", "uPulse"]);
@@ -296,8 +299,9 @@
     }
   }
 
-  function drawSculpture(width, height, viewProjection, position, eye) {
+  function drawSculpture(width, height, viewProjection, position, eye, check) {
     gl.useProgram(sculpture.handle);
+    check?.("shader program");
     if (state.wireframe) {
       gl.disable(gl.DEPTH_TEST);
       gl.enable(gl.BLEND);
@@ -311,6 +315,7 @@
     attribute(a.aPosition, 3, 8, 0);
     attribute(a.aNormal, 3, 8, 3);
     attribute(a.aMaterial, 2, 8, 6);
+    check?.("vertex attributes");
     gl.uniform3f(u.uRotation,
       state.pitch + 0.12 * Math.sin(state.time * 0.8) + 0.04 * Math.sin(state.time * 1.7),
       state.yaw + state.time * 0.34 + 0.13 * Math.sin(state.time * 0.6),
@@ -326,7 +331,9 @@
       gl.uniform3fv(u.uXRPosition, position);
       gl.uniform3f(u.uEyePosition, eye.x, eye.y, eye.z);
     }
+    check?.("shader uniforms");
     gl.drawArrays(state.wireframe ? gl.LINES : gl.TRIANGLES, 0, vertices.length / 8);
+    check?.("drawArrays");
     Object.values(a).forEach(location => gl.disableVertexAttribArray(location));
   }
 
@@ -535,7 +542,9 @@
     event.preventDefault();
     lost = true; pointers.clear(); pinch = null;
     stopFrame();
-    if (xr) void xr.end();
+    // makeXRCompatible may restore the context as part of an adapter switch.
+    // Other context losses still end XR because its framebuffer is invalidated.
+    if (xr && !xr.makingCompatible) void xr.end();
     setAvailable(false, "The graphics context was lost. Waiting for WebGL to recover…");
   });
   canvas.addEventListener("webglcontextrestored", () => {
@@ -615,7 +624,7 @@
         state.pitch = clamp(state.pitch + pitch, -1.4, 1.4);
         prepareSculpture();
       },
-      drawView: (projection, position, eye) => drawSculpture(1, 1, projection, position, eye)
+      drawView: (projection, position, eye, check) => drawSculpture(1, 1, projection, position, eye, check)
     });
   }
   initializeXR();

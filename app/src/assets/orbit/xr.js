@@ -13,8 +13,20 @@
     const arOffset = new Float32Array(3);
     const nearDistance = 0.85, farDistance = 4.5;
     let firstFrame = true, startupWatchdog = null;
+    let compatibilitySession = null;
     const mutePressed = new Set();
 
+    function checkGL(stage) {
+      const gl = options.getGL(), error = gl.getError();
+      if (error === gl.NO_ERROR) return;
+      const name = {
+        [gl.INVALID_ENUM]: "INVALID_ENUM", [gl.INVALID_VALUE]: "INVALID_VALUE",
+        [gl.INVALID_OPERATION]: "INVALID_OPERATION", [gl.OUT_OF_MEMORY]: "OUT_OF_MEMORY",
+        [gl.INVALID_FRAMEBUFFER_OPERATION]: "INVALID_FRAMEBUFFER_OPERATION",
+        [gl.CONTEXT_LOST_WEBGL]: "CONTEXT_LOST_WEBGL"
+      }[error] || "UNKNOWN";
+      throw new Error("WebGL 0x" + error.toString(16) + " " + name + " at " + stage);
+    }
     function diagnose(text, error) {
       console.warn("Orbit XR:", text, error || "");
       message(text + (error ? " (" + String(error.message || error).slice(0, 160) + ")" : ""));
@@ -142,9 +154,13 @@
         session.addEventListener("visibilitychange", onVisibility);
         options.onStart();
         const gl = options.getGL();
-        await gl.makeXRCompatible();
+        // A graphics-adapter switch may legitimately lose and restore context.
+        compatibilitySession = starting;
+        try { await gl.makeXRCompatible(); }
+        finally { if (compatibilitySession === starting) compatibilitySession = null; }
         if (session !== starting || disposed) return;
         if (!options.available()) throw new Error("The renderer is unavailable");
+        checkGL("XR compatibility / renderer setup");
         if (requestedMode === "immersive-ar" &&
             !["alpha-blend", "additive"].includes(session.environmentBlendMode)) {
           throw new Error("This AR session cannot display the real environment");
@@ -156,6 +172,7 @@
           ignoreDepthValues: requestedMode === "immersive-vr", framebufferScaleFactor: 1
         });
         session.updateRenderState({ baseLayer: layer, depthNear: 0.05, depthFar: 30 });
+        checkGL("XR layer setup");
         try { space = await starting.requestReferenceSpace("local-floor"); }
         catch (error) {
           if (session !== starting || disposed) return;
@@ -232,7 +249,9 @@
           for (let i = 0; i < 3; i++) sculpturePosition[i] += arOffset[i];
         }
         // Advance animation and upload geometry once, not once per eye.
+        if (firstFrame) checkGL("before first XR frame");
         options.prepareFrame(dt, yaw, pitch);
+        if (firstFrame) checkGL("geometry upload");
         options.onPose?.(pose.transform.matrix, sculpturePosition);
         const gl = options.getGL();
         gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
@@ -255,19 +274,21 @@
           gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         }
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        if (firstFrame) checkGL("XR framebuffer clear");
         let viewsDrawn = 0;
         for (const view of pose.views) {
           const viewport = layer.getViewport(view);
           if (!viewport) continue;
           gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+          if (firstFrame) checkGL((view.eye || "eye") + " viewport");
           OrbitXRMath.multiply(view.projectionMatrix, view.transform.inverse.matrix, viewProjection);
-          options.drawView(viewProjection, sculpturePosition, view.transform.position);
+          const check = firstFrame ? stage => checkGL((view.eye || "eye") + " " + stage) : undefined;
+          options.drawView(viewProjection, sculpturePosition, view.transform.position, check);
           viewsDrawn++;
         }
         if (firstFrame) {
           if (!viewsDrawn) throw new Error("No XR eye viewport is available");
-          const error = gl.getError();
-          if (error !== gl.NO_ERROR) throw new Error("WebGL error 0x" + error.toString(16));
+          checkGL("first XR frame complete");
           firstFrame = false;
           clearWatchdog();
         }
@@ -286,6 +307,7 @@
     void discover();
     return {
       get active() { return Boolean(session); },
+      get makingCompatible() { return Boolean(session && compatibilitySession === session); },
       refresh: sync,
       end,
       dispose() {

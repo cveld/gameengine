@@ -6,6 +6,8 @@
       0.018 * Math.sin(time * Math.PI * 3.2) : 1;
   }
   function create(options = {}) {
+    // Put the chord voices in the midrange instead of relying on deep bass.
+    const frequencies = [220, 261.6256, 329.6276, 110];
     const AudioContext = root.AudioContext || root.webkitAudioContext;
     let context = null, gain = null, panner = null, voices = [];
     let enabled = false, active = false, disposed = false, initialized = false, lastChord = -1;
@@ -32,12 +34,12 @@
       delay.connect(feedback); feedback.connect(delay);
       delay.connect(echo); echo.connect(gain);
       gain.connect(panner); panner.connect(context.destination);
-      voices = [110, 130.8128, 164.8138, 55].map((frequency, index) => {
+      voices = frequencies.map((frequency, index) => {
         const oscillator = context.createOscillator(), volume = context.createGain();
         oscillator.type = index === 3 ? "sine" : "triangle";
         oscillator.frequency.value = frequency;
         oscillator.detune.value = index % 2 ? 4 : -4;
-        volume.gain.value = index === 3 ? 0.45 : 0.18;
+        volume.gain.value = 0.18;
         oscillator.connect(volume); volume.connect(filter); oscillator.start();
         nodes.push(oscillator, volume);
         return oscillator;
@@ -89,14 +91,14 @@
     }
     function update(time, shape, pulseEnabled, source, pose) {
       if (!context || disposed || context.state !== "running") return;
-      level(enabled && active ? 0.10 * (0.72 + 0.28 * (pulse(time, pulseEnabled) - 0.927) / 0.146) : 0);
+      level(enabled && active ? 0.16 * (0.72 + 0.28 * (pulse(time, pulseEnabled) - 0.927) / 0.146) : 0);
       if (!enabled || !active) return;
       const chord = Math.floor(time / 10) % 4 + shape * 4;
       if (chord !== lastChord) {
         lastChord = chord;
         const transpositions = [1, 0.8908987, 1.1892071, 1.0594631];
         const ratio = transpositions[chord % 4] * [1, 1.122462, 0.943874][shape];
-        [110, 130.8128, 164.8138, 55].forEach((frequency, i) =>
+        frequencies.forEach((frequency, i) =>
           voices[i].frequency.setTargetAtTime(frequency * ratio, context.currentTime, 0.7));
       }
       const listener = context.listener;

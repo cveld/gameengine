@@ -3,65 +3,98 @@
 module.exports = function installMockXR(config = {}) {
   const state = {
     supported: config.supported !== false, arSupported: config.arSupported !== false,
-    requests: [], sessions: [], draws: [], layerOptions: [],
+    requests: [], sessions: [], draws: [], layerOptions: [], contextRequests: [],
     uploads: 0, viewports: [], matrices: [], positions: [], spaces: [], pulses: [],
     failRequest: Boolean(config.failRequest), failSetup: Boolean(config.failSetup),
     failFloor: Boolean(config.failFloor), missingPose: false, device: null
   };
-  const originalDraw = WebGLRenderingContext.prototype.drawArrays;
-  WebGLRenderingContext.prototype.drawArrays = function (...args) {
-    state.draws.push(args);
-    return originalDraw.apply(this, args);
-  };
-  const originalUpload = WebGLRenderingContext.prototype.bufferSubData;
-  WebGLRenderingContext.prototype.bufferSubData = function (...args) {
-    state.uploads++;
-    return originalUpload.apply(this, args);
-  };
-  const names = new WeakMap();
-  const originalLocation = WebGLRenderingContext.prototype.getUniformLocation;
-  WebGLRenderingContext.prototype.getUniformLocation = function (program, name) {
-    const location = originalLocation.call(this, program, name);
-    if (location) names.set(location, name);
-    return location;
-  };
-  const matrix = WebGLRenderingContext.prototype.uniformMatrix4fv;
-  WebGLRenderingContext.prototype.uniformMatrix4fv = function (location, transpose, data) {
-    if (names.get(location) === "uViewProjection") state.matrices.push(Array.from(data));
-    return matrix.call(this, location, transpose, data);
-  };
-  const vector = WebGLRenderingContext.prototype.uniform3fv;
-  WebGLRenderingContext.prototype.uniform3fv = function (location, data) {
-    if (names.get(location) === "uXRPosition") state.positions.push(Array.from(data));
-    return vector.call(this, location, data);
-  };
-  const viewport = WebGLRenderingContext.prototype.viewport;
-  WebGLRenderingContext.prototype.viewport = function (...args) {
-    state.viewports.push(args);
-    return viewport.apply(this, args);
-  };
-  const scalar = WebGLRenderingContext.prototype.uniform1f;
-  WebGLRenderingContext.prototype.uniform1f = function (location, value) {
-    if (names.get(location) === "uPulse") state.pulses.push(value);
-    return scalar.call(this, location, value);
+  const getContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+    if (["webgl", "webgl2"].includes(type)) state.contextRequests.push({ type, attributes: args[0] });
+    return config.webgl1Only && type === "webgl2" ? null : getContext.call(this, type, ...args);
   };
   if (config.watchdogMs) {
     const timeout = globalThis.setTimeout;
     globalThis.setTimeout = (callback, delay, ...args) =>
       timeout(callback, delay === 8000 ? config.watchdogMs : delay, ...args);
   }
-  const framebufferStatus = WebGLRenderingContext.prototype.checkFramebufferStatus;
-  WebGLRenderingContext.prototype.checkFramebufferStatus = function (target) {
-    if (config.incompleteFramebuffer && state.device?.renderState.baseLayer &&
-        this.getParameter(this.FRAMEBUFFER_BINDING) === state.device.renderState.baseLayer.framebuffer) {
-      return this.FRAMEBUFFER_UNSUPPORTED;
-    }
-    return framebufferStatus.call(this, target);
-  };
-  WebGLRenderingContext.prototype.makeXRCompatible = async function () {
-    if (state.failSetup) throw new Error("Synthetic compatibility failure");
-    if (config.deferCompatibility) await new Promise(resolve => { state.finishCompatibility = resolve; });
-  };
+  for (const prototype of [WebGLRenderingContext.prototype, WebGL2RenderingContext.prototype]) {
+    const originalDraw = prototype.drawArrays;
+    prototype.drawArrays = function (...args) {
+      state.draws.push(args);
+      if (config.failPhase === "drawArrays" && state.device?.renderState.baseLayer && !state.device.ended) this.useProgram(null);
+      return originalDraw.apply(this, args);
+    };
+    const originalUpload = prototype.bufferSubData;
+    prototype.bufferSubData = function (...args) {
+      state.uploads++;
+      if (config.failPhase === "geometry upload" && state.device?.renderState.baseLayer && !state.device.ended) {
+        this.bindBuffer(this.ARRAY_BUFFER, null);
+      }
+      return originalUpload.apply(this, args);
+    };
+    const names = new WeakMap();
+    const originalLocation = prototype.getUniformLocation;
+    prototype.getUniformLocation = function (program, name) {
+      const location = originalLocation.call(this, program, name);
+      if (location) names.set(location, name);
+      return location;
+    };
+    const matrix = prototype.uniformMatrix4fv;
+    prototype.uniformMatrix4fv = function (location, transpose, data) {
+      if (names.get(location) === "uViewProjection") state.matrices.push(Array.from(data));
+      if (config.failPhase === "shader uniforms" && state.device?.renderState.baseLayer && !state.device.ended) {
+        // A float setter on a mat4 uniform produces a real INVALID_OPERATION.
+        this.uniform1f(location, 1);
+      }
+      return matrix.call(this, location, transpose, data);
+    };
+    const vector = prototype.uniform3fv;
+    prototype.uniform3fv = function (location, data) {
+      if (names.get(location) === "uXRPosition") state.positions.push(Array.from(data));
+      return vector.call(this, location, data);
+    };
+    const viewport = prototype.viewport;
+    prototype.viewport = function (...args) {
+      state.viewports.push(args);
+      return viewport.apply(this, args);
+    };
+    const scalar = prototype.uniform1f;
+    prototype.uniform1f = function (location, value) {
+      if (names.get(location) === "uPulse") state.pulses.push(value);
+      return scalar.call(this, location, value);
+    };
+    const framebufferStatus = prototype.checkFramebufferStatus;
+    prototype.checkFramebufferStatus = function (target) {
+      if (config.incompleteFramebuffer && state.device?.renderState.baseLayer &&
+          this.getParameter(this.FRAMEBUFFER_BINDING) === state.device.renderState.baseLayer.framebuffer) {
+        return this.FRAMEBUFFER_UNSUPPORTED;
+      }
+      return framebufferStatus.call(this, target);
+    };
+    prototype.makeXRCompatible = async function () {
+      if (state.failSetup) throw new Error("Synthetic compatibility failure");
+      if (config.deferCompatibility) await new Promise(resolve => { state.finishCompatibility = resolve; });
+      if (config.restoreDuringCompatibility) {
+        const gl = this, extension = gl.getExtension("WEBGL_lose_context");
+        await new Promise(resolve => {
+          gl.canvas.addEventListener("webglcontextrestored", () => {
+            state.compatibilityRestored = true;
+            resolve();
+          }, { once: true });
+          gl.canvas.addEventListener("webglcontextlost", () => {
+            setTimeout(() => extension.restoreContext(), 100);
+          }, { once: true });
+          extension.loseContext();
+        });
+      }
+      if (config.failPhase === "compatibility") {
+        const unlinked = this.createProgram();
+        this.useProgram(unlinked);
+        this.deleteProgram(unlinked);
+      }
+    };
+  }
 
   class MockLayer {
     constructor(session, gl, options) {

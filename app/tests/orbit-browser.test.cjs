@@ -38,17 +38,24 @@ after(async () => {
 });
 
 async function withPage(options, run) {
-  const context = await browser.newContext({ viewport: { width: 1100, height: 850 }, reducedMotion: "reduce", ...options });
+  const { webgl1Only = false, ...browserOptions } = options;
+  const context = await browser.newContext({ viewport: { width: 1100, height: 850 }, reducedMotion: "reduce", ...browserOptions });
   const page = await context.newPage();
   page.on("pageerror", error => errors.push(error.message));
   try {
     // Flat-view regressions must not depend on the host's headset service.
     // Immersive capability/session behavior is covered in orbit-xr.test.cjs.
-    await page.addInitScript(() => {
+    await page.addInitScript(forceWebGL1 => {
+      if (forceWebGL1) {
+        const getContext = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+          return type === "webgl2" ? null : getContext.call(this, type, ...args);
+        };
+      }
       const xr = new EventTarget();
       xr.isSessionSupported = async () => false;
       Object.defineProperty(navigator, "xr", { configurable: true, value: xr });
-    });
+    }, webgl1Only);
     await page.goto(origin + "/assets/orbit/index.html");
     await page.waitForFunction(() => {
       const canvas = document.getElementById("scene");
@@ -111,7 +118,7 @@ test("the synthesized soundscape produces bounded nonempty audio and silence whe
       }
       return { audible: await render(true), muted: await render(false) };
     });
-    assert.ok(result.audible.rms > 0.001, JSON.stringify(result));
+    assert.ok(result.audible.rms > 0.01, JSON.stringify(result));
     assert.ok(result.audible.peak < 0.15, "Keep generated audio comfortably bounded");
     assert.equal(result.muted.peak, 0);
   });
@@ -145,7 +152,7 @@ test("three sculptures render without WebGL errors and have distinct output", as
       await page.locator(`[data-shape="${shape}"]`).click();
       assert.equal(await page.locator(`[data-shape="${shape}"]`).getAttribute("aria-pressed"), "true");
       images.push(await screenshot(page));
-      assert.equal(await page.evaluate(() => document.getElementById("scene").getContext("webgl").getError()), 0);
+      assert.equal(await page.evaluate(() => (document.getElementById("scene").getContext("webgl2") || document.getElementById("scene").getContext("webgl")).getError()), 0);
     }
     differentImage(images[0], images[1]);
     differentImage(images[1], images[2]);
@@ -154,6 +161,23 @@ test("three sculptures render without WebGL errors and have distinct output", as
       await page.locator('[data-shape="0"]').click();
       await page.screenshot({ path: process.env.ORBIT_SCREENSHOT });
     }
+  });
+});
+
+test("WebGL 1 fallback keeps flat sculptures, wireframe and rain usable", async () => {
+  await withPage({ webgl1Only: true }, async page => {
+    const images = [];
+    for (const shape of [0, 1, 2]) {
+      await page.locator(`[data-shape="${shape}"]`).click();
+      images.push(await screenshot(page));
+    }
+    differentImage(images[0], images[1]);
+    differentImage(images[1], images[2]);
+    await page.locator("#wireframe").check();
+    differentImage(await screenshot(page), images[2]);
+    await page.locator("#rain").uncheck();
+    assert.equal(await page.evaluate(() => document.getElementById("scene").getContext("webgl").getError()), 0);
+    assert.equal(await page.locator("#status").isVisible(), false);
   });
 });
 
@@ -206,7 +230,7 @@ test("zoom slider renders close-ups for all sculptures and resets to the default
       await page.locator("#zoom").fill("4");
       assert.equal(await page.locator("#zoom-value").textContent(), "4.00×");
       differentImage(await screenshot(page), normal);
-      assert.equal(await page.evaluate(() => document.getElementById("scene").getContext("webgl").getError()), 0);
+      assert.equal(await page.evaluate(() => (document.getElementById("scene").getContext("webgl2") || document.getElementById("scene").getContext("webgl")).getError()), 0);
       await page.locator("#scene").dblclick();
       assert.equal(await page.locator("#zoom-value").textContent(), "1.00×");
       sameImage(await screenshot(page), normal);
@@ -366,7 +390,7 @@ test("lost WebGL context recovers with the current controls and geometry", async
     await page.locator('[data-shape="2"]').click();
     const initial = await screenshot(page);
     await page.evaluate(() => {
-      window.contextRecovery = document.getElementById("scene").getContext("webgl").getExtension("WEBGL_lose_context");
+      window.contextRecovery = (document.getElementById("scene").getContext("webgl2") || document.getElementById("scene").getContext("webgl")).getExtension("WEBGL_lose_context");
       window.contextRecovery.loseContext();
     });
     await page.waitForFunction(() => !document.getElementById("status").hidden);
@@ -386,7 +410,7 @@ test("missing WebGL shows an actionable fallback", async () => {
     await page.addInitScript(() => {
       const original = HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.getContext = function (type, ...args) {
-        return type === "webgl" ? null : original.call(this, type, ...args);
+        return ["webgl", "webgl2"].includes(type) ? null : original.call(this, type, ...args);
       };
     });
     await page.goto(origin + "/assets/orbit/index.html");
@@ -537,7 +561,7 @@ test("immersive controls can still be revealed to exit after WebGL context loss"
   await withPage({}, async page => {
     await page.locator("#fullscreen").click();
     await page.waitForFunction(() => Boolean(document.fullscreenElement));
-    await page.evaluate(() => document.getElementById("scene").getContext("webgl")
+    await page.evaluate(() => (document.getElementById("scene").getContext("webgl2") || document.getElementById("scene").getContext("webgl"))
       .getExtension("WEBGL_lose_context").loseContext());
     await page.waitForFunction(() => !document.getElementById("status").hidden);
     await page.locator("#scene").click({ position: { x: 50, y: 50 } });

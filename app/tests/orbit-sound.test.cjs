@@ -21,13 +21,15 @@ test("sound is opt-in, fades when paused/muted and follows source/headset poses"
     assert.equal(state.contexts.length, 0, "Loading must not start audio");
     await sound.unlock();
     const context = state.contexts[0], master = context.nodes[0], panner = context.nodes[1];
+    assert.deepEqual(context.nodes.filter(node => node.kind === "oscillator").map(node => node.frequency.value),
+      [220, 261.6256, 329.6276, 110], "Keep chord voices out of the very quiet deep-bass range");
     sound.setActive(true);
     sound.update(0.3, 0, true);
     assert.equal(master.gain.value, 0, "XR unlock alone must stay silent");
     sound.setEnabled(true);
     const pose = [0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 2, 1.6, -3, 1];
     sound.update(0.3, 1, true, [1, 2, -4], pose);
-    assert.ok(master.gain.value > 0 && master.gain.value < 0.11);
+    assert.ok(master.gain.value > 0.10 && master.gain.value <= 0.16);
     assert.deepEqual([panner.positionX.value, panner.positionY.value, panner.positionZ.value], [1, 2, -4]);
     assert.deepEqual([context.listener.positionX.value, context.listener.positionY.value,
       context.listener.positionZ.value], [2, 1.6, -3]);

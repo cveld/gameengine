@@ -93,7 +93,8 @@ Assets are self-contained under `app/src/assets/orbit`:
 - `geometry.js`: the three parametrically defined surfaces, spike placement,
   spike extension and living deformation adapted from `orbit/src/scene.cpp`.
   It also exports its geometry functions through CommonJS for Node tests.
-- `orbit.js`: WebGL 1 shaders, flat-lit triangles, wireframe lines, stars, light
+- `orbit.js`: GLSL ES 1.00 shaders on WebGL 2 (WebGL 1 fallback),
+  flat-lit triangles, wireframe lines, stars, light
   motes and rain; pointer/keyboard input and renderer lifecycle.
 - `xr.js`: independent immersive VR/AR capability detection, session lifecycle, per-eye
   WebXR rendering and controller input.
@@ -143,7 +144,8 @@ looks good, but entering VR produces a black screen. This supersedes the
 earlier statement that no on-device feedback was available. The agent does
 not have that headset; the exact VR failure has not been reproduced locally.
 
-The shared WebGL context creation and AR layer settings are preserved.
+The initial mitigation preserved shared WebGL context creation and AR layer
+settings. The Quest 2 follow-up below changes context selection, not AR's layer.
 VR uses an alpha-capable RGBA layer like the working AR path, but explicitly
 clears it with opaque alpha. VR disables optional layer MSAA and compositor
 depth consumption; depth testing of the actual sculpture remains enabled.
@@ -160,6 +162,64 @@ trigger that timeout.
 Setup/render diagnostics are shown below the relevant entry button and also
 logged to the browser console. Retest Enter VR on the Quest; if it still fails,
 the returned message can guide the next investigation.
+
+#### Quest 2 WebGL 0x502 follow-up
+
+On November 8, 2026 the user identified the headset as a **Quest 2** and
+reported "webgl error 502". The existing Orbit diagnostic prints hexadecimal
+WebGL codes; `0x502` is `INVALID_OPERATION`, not an HTTP 502 response.
+The report alone does not identify the failing GPU call, and the exact
+Quest 2 failure has not been reproduced locally.
+
+The user then confirmed that both VR and AR examples at the Immersive Web
+samples site work on the same Quest 2. That is evidence against a general lack
+of immersive browser support, but not proof of a specific Orbit GPU failure.
+Comparison with the current `immersive-vr-session.html`,
+`immersive-ar-session.html` and `js/render/core/renderer.js` found that those
+samples use a WebGL 2 context with `xrCompatible: true`. Orbit previously
+created WebGL 1 without the initial XR-compatible flag.
+
+Orbit now prefers WebGL 2 with that initial flag and retains WebGL 1 when
+WebGL 2 context creation is unavailable. Both use the same shaders and retain
+RGBA, flat transparency and the existing VR/AR layer settings. Khronos'
+WebGL 2 specification explicitly supports GLSL ES 1.00 shaders, so no duplicate
+shader implementation or third-party rendering dependency is needed.
+This aligns context selection with the working examples; it remains a
+compatibility change requiring physical-headset retesting, not a confirmed fix
+for the Quest 2 report.
+
+The former first-frame check read the accumulated WebGL error flag only after
+both eyes were drawn. It could not distinguish setup errors from geometry,
+framebuffer, shader or draw errors. Checks now identify compatibility setup,
+layer setup, frame entry, geometry upload, framebuffer clear, each eye's
+viewport, shader program, vertex attributes, uniforms and `drawArrays`.
+They include the symbolic error name and stop safely rather than ignoring
+`INVALID_OPERATION`. Detailed render checks only run on the first frame,
+not continuously in the headset's render loop.
+
+A separate, reproducible startup bug was fixed: `makeXRCompatible()` may
+legitimately trigger context loss/restoration, but Orbit previously ended
+the XR session on every context loss. During that compatibility operation
+the session is now retained; the existing restoration handler recreates
+programs, uniform locations and buffers before rendering resumes. Context
+loss after compatibility still ends XR because its framebuffer is invalidated.
+This behavior follows the Immersive Web Working Group's WebXR specification,
+section `make-xr-compatible`. **It is not evidence that adapter switching
+caused the reported Quest 2 0x502.**
+
+Retesting on the physical Quest 2 is still required after deployment.
+If it fails again, capture the entire returned diagnostic, especially the
+text after `at`, and confirm whether Enter VR or Enter AR was selected.
+
+Validation on November 8, 2026: all **83 checks passed** (30 flat-browser,
+37 synthetic XR and 16 geometry/math/sound checks). The suite covers preferred
+WebGL 2, forced WebGL 1 flat/VR/AR fallback, both-eye output, real context
+loss/restoration during compatibility, and real WebGL `INVALID_OPERATION`
+errors injected during setup, upload, uniforms and drawing. The compatibility
+restoration regression fails against the prior committed assets and passes
+with the fix. Browser tests used the existing built Angular app with updated
+static assets copied in; no new Angular build or dependency/lockfile changes.
+These are Chromium GPU/software-renderer tests, not physical Quest 2 tests.
 
 Use the asset directly in the Quest browser:
 
@@ -227,6 +287,22 @@ music files, CDN, network calls or new dependencies are used. The envelope
 follows the same breathing clock; pauses and hidden/blurred/tracking-lost sessions
 fade to silence. With Pulse disabled, ambience has steady volume. Browser/headset
 volume still determines actual loudness.
+
+On November 8, 2026 the user reported hearing very little music on the headset.
+The chord voices were moved up one octave to 220/261.6/329.6 Hz with a 110 Hz
+bass voice, replacing the bass-heavy 55–164.8 Hz mix. Voice gains are balanced
+at 0.18 and maximum master gain was raised from 0.10 to 0.16. This targets
+clearer, more audible ambience without introducing autoplay or downloaded music.
+Mute, pause, visibility fading, pulse modulation and spatial attenuation remain.
+Audibility on the actual Quest speakers still needs confirmation; device volume
+matters, and Sound must be on with the animation playing.
+
+After that audio-only adjustment, seven focused sound/pulse/browser/XR checks
+passed against the updated built assets. Real OfflineAudioContext output has
+RMS above 0.01 and peak below 0.15 in the tested excerpt, with exact silence
+when muted. Opt-in, pause/visibility fading, spatial placement, controller
+mute and audio initialization retries remain covered. The earlier 83-check
+run preceded this final audio adjustment; a second full suite was not run.
 
 In XR, an HRTF panner follows the sculpture's reference-space position, including
 AR placement changes, while the listener follows headset position/orientation.
