@@ -1,6 +1,6 @@
 # Tiles and Orbit integration
 
-Updated on November 7, 2026. The original inspection was followed by a
+Updated on November 8, 2026. The original inspection was followed by a
 user-requested WebGL browser adaptation.
 
 ## Home-page tile structure
@@ -147,7 +147,7 @@ iframe, allowing the outer page to scroll normally without an inner iframe
 scrollbar. This also handles rotation and content wrapping without a viewport
 height feedback loop.
 
-One pointer orbits; two pointers pinch to zoom within the existing 0.55–1.65
+One pointer orbits; two pointers pinch to zoom within the 0.55–4.00
 range. Lifting one finger resumes orbiting with the other. Cancellation,
 context loss, page exit and camera reset clear gesture state. Browser page
 scrolling and zooming remain available outside the sculpture canvas.
@@ -156,6 +156,18 @@ Mobile validation uses Chromium touch/viewport emulation, not a physical iPhone
 or Android handset. It covers 320×568, 360×640, 390×844, 430×932, 568×320,
 844×390 and 768×1024 layouts, plus embedded portrait/landscape resizing,
 minimum touch targets, pinch limits and one-finger handoff.
+
+The maximum zoom was increased from 1.65× to 4× on November 8, 2026 for closer
+detail inspection. Wheel and pinch limits are read from the slider attributes,
+so all three inputs share the same range. The starting/reset zoom remains 1×.
+Zoom changes projection magnification, not camera distance; close-up views
+intentionally crop parts of the sculpture at the viewport edges.
+
+Validation on November 8: 27 browser checks and 6 geometry tests passed.
+Browser checks used both source assets and the existing built Angular app with
+the updated static assets copied into its asset directory; no new Angular build
+was needed for this asset-only change. Coverage includes 4× slider close-ups
+for all three sculptures, wheel/pinch limits, immersive pinch and camera reset.
 
 ## Orbit validation commands
 

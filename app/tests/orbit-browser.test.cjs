@@ -131,10 +131,26 @@ test("wireframe, rain, camera drag, zoom and reset work while paused", async () 
     await page.mouse.up();
     differentImage(await screenshot(page), initial);
     await page.mouse.wheel(0, -2000);
-    await page.waitForFunction(() => Number(document.getElementById("zoom").value) === 1.65);
-    assert.equal(await page.locator("#zoom-value").textContent(), "1.65×");
+    await page.waitForFunction(() => Number(document.getElementById("zoom").value) === 4);
+    assert.equal(await page.locator("#zoom-value").textContent(), "4.00×");
     await page.locator("#reset").click();
     sameImage(await screenshot(page), initial);
+  });
+});
+
+test("zoom slider renders close-ups for all sculptures and resets to the default", async () => {
+  await withPage({}, async page => {
+    for (const shape of [0, 1, 2]) {
+      await page.locator(`[data-shape="${shape}"]`).click();
+      const normal = await screenshot(page);
+      await page.locator("#zoom").fill("4");
+      assert.equal(await page.locator("#zoom-value").textContent(), "4.00×");
+      differentImage(await screenshot(page), normal);
+      assert.equal(await page.evaluate(() => document.getElementById("scene").getContext("webgl").getError()), 0);
+      await page.locator("#scene").dblclick();
+      assert.equal(await page.locator("#zoom-value").textContent(), "1.00×");
+      sameImage(await screenshot(page), normal);
+    }
   });
 });
 
@@ -233,8 +249,8 @@ test("two-finger pinch zooms, clamps its range and hands off to one-finger orbit
     });
     await send("touchStart", [[0, 150]]);
     await send("touchStart", [[0, 150], [1, 210]]);
-    await send("touchMove", [[0, 130], [1, 230]]);
-    await page.waitForFunction(() => Number(document.getElementById("zoom").value) === 1.65);
+    await send("touchMove", [[0, 40], [1, 340]]);
+    await page.waitForFunction(() => Number(document.getElementById("zoom").value) === 4);
     await send("touchMove", [[0, 180], [1, 185]]);
     await page.waitForFunction(() => Number(document.getElementById("zoom").value) === 0.55);
     await send("touchEnd", [[1, 185]]);
@@ -429,12 +445,12 @@ for (const [width, height] of [[1100, 850], [390, 844], [844, 390]]) {
           { id: 0, x: 150, y: height / 2 }, { id: 1, x: 210, y: height / 2 }
         ] });
         await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [
-          { id: 0, x: 130, y: height / 2 }, { id: 1, x: 230, y: height / 2 }
+          { id: 0, x: 40, y: height / 2 }, { id: 1, x: 340, y: height / 2 }
         ] });
         await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
         await session.detach();
         assert.equal(await page.locator(".controls").isVisible(), false);
-        assert.equal(await page.locator("#zoom-value").textContent(), "1.65×");
+        assert.equal(await page.locator("#zoom-value").textContent(), "4.00×");
       }
       await page.locator("#scene").tap();
       assert.equal(await page.locator("#fullscreen").isVisible(), true);

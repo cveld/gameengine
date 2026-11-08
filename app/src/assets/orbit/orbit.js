@@ -6,6 +6,8 @@
   const play = document.getElementById("play");
   const tempo = document.getElementById("tempo");
   const zoom = document.getElementById("zoom");
+  // Keep wheel and pinch limits in sync with the visible slider.
+  const minZoom = Number(zoom.min), maxZoom = Number(zoom.max);
   const wireframe = document.getElementById("wireframe");
   const rain = document.getElementById("rain");
   const dialog = document.getElementById("shortcuts");
@@ -453,7 +455,7 @@
     pointer.x = event.clientX; pointer.y = event.clientY;
     if (pinch && pointers.size === 2) {
       const [a, b] = Array.from(pointers.values());
-      state.zoom = clamp(pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / pinch.distance, 0.55, 1.65);
+      state.zoom = clamp(pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / pinch.distance, minZoom, maxZoom);
       syncControls();
     }
     requestRender();
@@ -473,7 +475,7 @@
     if (failed || lost) return;
     event.preventDefault();
     const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? canvas.clientHeight : 1);
-    state.zoom = clamp(state.zoom * Math.exp(-delta * 0.001), 0.55, 1.65);
+    state.zoom = clamp(state.zoom * Math.exp(-delta * 0.001), minZoom, maxZoom);
     syncControls();
     requestRender();
   }, { passive: false });
