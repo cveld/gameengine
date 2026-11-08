@@ -7,6 +7,8 @@
   <title>Orbit — a little space to play</title>
   <link rel="stylesheet" href="style.css">
   <script src="geometry.js" defer></script>
+  <script src="xr-math.js" defer></script>
+  <script src="xr.js" defer></script>
   <script src="orbit.js" defer></script>
 </head>
 <body>
@@ -14,11 +16,13 @@
     <header>
       <div class="wordmark"><span class="orbit-mark" aria-hidden="true">◎</span> orbit <span class="edition">WEBGL</span></div>
       <div class="header-actions">
+        <button id="enter-vr" class="quiet" aria-pressed="false" aria-describedby="vr-status" disabled>Enter VR</button>
         <button id="fullscreen" class="quiet" aria-pressed="false" aria-describedby="fullscreen-status" title="Immersive fullscreen. Tap the sculpture to show controls.">Fullscreen</button>
         <button id="hide-controls" class="quiet">Hide controls</button>
         <button id="help" class="quiet" aria-haspopup="dialog">Shortcuts <kbd>?</kbd></button>
       </div>
       <p id="fullscreen-status" class="fullscreen-status" role="status" hidden></p>
+      <p id="vr-status" class="fullscreen-status" role="status" hidden></p>
     </header>
     <section class="stage" aria-label="Sculpture viewer">
       <div class="halo" aria-hidden="true"></div>
@@ -58,6 +62,11 @@
       <dt>Double-click</dt><dd>Reset the camera only</dd>
       <dt>Tap / Enter</dt><dd>Show or hide controls in fullscreen</dd>
       <dt><kbd>Tab</kbd></dt><dd>Reveal fullscreen controls for keyboard navigation</dd>
+      <dt>VR trigger</dt><dd>Play / pause the sculpture</dd>
+      <dt>VR grip</dt><dd>Choose the next sculpture</dd>
+      <dt>Left thumbstick</dt><dd>Bring the sculpture closer / further away</dd>
+      <dt>Right thumbstick</dt><dd>Rotate the sculpture</dd>
+      <dt>Headset system menu</dt><dd>Exit VR and return to the browser</dd>
       <dt><kbd>Escape</kbd></dt><dd>Close this dialog</dd>
     </dl>
     <form method="dialog"><button autofocus>Back to the sculpture</button></form>

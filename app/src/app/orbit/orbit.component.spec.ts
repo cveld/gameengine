@@ -16,6 +16,7 @@ describe('OrbitComponent', () => {
     const frame = fixture.nativeElement.querySelector('iframe') as HTMLIFrameElement;
     expect(frame.getAttribute('src')).toBe('assets/orbit/index.html');
     expect(frame.title).toContain('Orbit');
+    expect(frame.getAttribute('allow')).toContain('xr-spatial-tracking');
   });
 
   it('provides a route back to home', () => {

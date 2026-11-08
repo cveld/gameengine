@@ -95,6 +95,10 @@ Assets are self-contained under `app/src/assets/orbit`:
   It also exports its geometry functions through CommonJS for Node tests.
 - `orbit.js`: WebGL 1 shaders, flat-lit triangles, wireframe lines, stars, light
   motes and rain; pointer/keyboard input and renderer lifecycle.
+- `xr.js`: immersive VR capability detection, session lifecycle, per-eye
+  WebXR rendering and controller input.
+- `xr-math.js`: tested column-major matrix composition and world-locked
+  sculpture placement.
 - `LICENSE`: the original Orbit MIT license and copyright attribution.
 
 There are no CDN imports, new application dependencies, telemetry, persistence,
@@ -127,6 +131,73 @@ Dragging and pinching do not reveal controls. Browser-driven exit updates the bu
 `fullscreenchange`. Unsupported fullscreen disables the toggle with explanatory
 text; a rejected request leaves Orbit usable and displays a status message.
 The iframe already grants `allow="fullscreen"`.
+
+### WebXR / Quest
+
+Use the asset directly in the Quest browser:
+
+```text
+https://gentle-field-09d23da03.azurestaticapps.net/assets/orbit/index.html
+```
+
+Choose **Enter VR**, not Fullscreen, and grant VR permission. The button requests
+an `immersive-vr` session; the regular Fullscreen button remains the flat
+browser-panel mode. The Angular wrapper additionally delegates
+`xr-spatial-tracking` to its iframe so VR can also be entered from `/orbit`.
+VR requires a secure context (HTTPS, or localhost for development) and browser
+support for immersive WebXR.
+
+The same three sculptures are rendered in a dark VR environment, with distinct
+projection/view matrices for each eye and tracked head movement. The sculpture
+is placed 1.8 meters in front of the initial horizontal gaze, at the initial
+eye height, at a fixed physical scale of 0.30 meters per geometry unit. It stays
+world-locked instead of following the head. Reference-space resets re-center it.
+`local-floor` is optional; `local` is the fallback.
+
+VR has no HTML control panels or forced camera locomotion. On standard tracked
+controllers:
+
+- Trigger (`select`): play/pause.
+- Grip (`squeeze`): next sculpture.
+- Left thumbstick up/down: move the sculpture closer/further away, within
+  0.85–4.5 meters of its initial anchor.
+- Right thumbstick: rotate the sculpture.
+- Headset system menu: leave VR; the browser's Exit VR button is also available
+  when the browser UI is accessible.
+
+Head tracking keeps rendering even when sculpture animation is paused.
+Geometry is updated/uploaded once per XR frame and reused for both eyes.
+The XR session owns its animation loop; ordinary window frames are stopped until
+VR ends. Ending/re-entering VR restores browser rendering and existing controls.
+Missing tracking poses and hidden/blurred XR sessions do not advance animation.
+Context loss and page exit end the XR session and restore/release resources.
+
+This is VR, not passthrough AR. The browser's flat rain, stars, halo and floor
+effects are intentionally not rendered in VR: only the actual lit 3D sculpture
+is shown, avoiding head-locked background graphics. Browser zoom controls remain
+0.55–4× in flat mode; VR uses physical approach/head movement and the controller's
+distance adjustment instead.
+
+Sources used for API implementation: the Immersive Web Working Group's
+`webxr-samples` immersive-vr-session and input-tracking examples.
+Validation uses synthetic XR sessions with actual WebGL shader/framebuffer
+rendering; **no physical Quest or real headset compositor has been tested**.
+Quest controller mappings, comfort, performance and permissions still need an
+on-device check.
+
+WebXR validation on November 8, 2026:
+
+- 14 synthetic XR browser tests passed against the production build: per-eye
+  viewports and projections, actual nonempty/different WebGL eye images,
+  world-locked head movement, three sculptures, controller input/range limits,
+  pose loss, visibility changes, recenter/floor fallback, session cancellation,
+  page lifecycle, context loss/recovery, capability changes, permission/setup
+  errors and entry from the Angular iframe.
+- 27 existing browser regression checks passed against the production build.
+- 6 geometry tests, 4 XR math tests and 4 Angular wrapper tests passed.
+- Application/spec TypeScript checks and the production build passed.
+- Initial bundle: 717.92 kB; the existing 500 kB warning budget is exceeded,
+  while the 1 MB error budget is not. Budget settings were not changed.
 
 Fullscreen has no page scrolling; revealed header and control overlays can
 scroll individually on short screens. Resize reports to the Angular parent are suppressed while
@@ -175,6 +246,7 @@ Run from the repository root with a recent Node runtime (tested with Node 24):
 
 ```powershell
 node --test app/tests/orbit-geometry.test.cjs
+node --test app/tests/orbit-xr-math.test.cjs
 ```
 
 The optional browser smoke suite uses an existing Playwright installation,
@@ -183,6 +255,7 @@ without adding it to this app's dependencies:
 ```powershell
 $env:ORBIT_PLAYWRIGHT_MODULE = 'C:\path\to\node_modules\playwright'
 node --test app/tests/orbit-browser.test.cjs
+node --test app/tests/orbit-xr.test.cjs
 ```
 
 It starts and stops its own loopback test server and headless browser. For
@@ -233,5 +306,7 @@ node node_modules/@angular/cli/bin/ng build --configuration production
 Prefer the project's declared Node version in normal development. The direct CLI
 command avoids npm 11/PowerShell argument parsing of extra script options.
 
-`app/package-lock.json` was already modified before this work. Preserve that
-unrelated change; do not overwrite or include it in an unrelated commit.
+`app/package-lock.json` initially appeared modified, but later inspection
+confirmed its contents matched Git exactly. On November 8 the user requested
+CRLF line endings in the working copy; that conversion left Git clean. No
+dependency versions changed. Preserve any future unrelated lockfile edits.

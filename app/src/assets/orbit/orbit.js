@@ -1,4 +1,4 @@
-/* global OrbitGeometry */
+/* global OrbitGeometry, OrbitXR */
 (function () {
   "use strict";
   const canvas = document.getElementById("scene");
@@ -25,6 +25,7 @@
     wireframe: false, rain: true
   };
   let gl, sculpture, atmosphere, geometryBuffer, atmosphereBuffer;
+  let xr = null, uploadedTime = NaN, uploadedWireframe = null;
   let mesh = OrbitGeometry.buildMesh(0);
   let frame = null, previousFrame = null, meshTime = NaN;
   let lost = false, failed = false, suspended = false, pinch = null;
@@ -40,6 +41,9 @@
     attribute vec2 aMaterial;
     uniform vec3 uRotation;
     uniform vec2 uScale;
+    uniform bool uXR;
+    uniform mat4 uViewProjection;
+    uniform mediump vec3 uXRPosition;
     varying vec3 vNormal;
     varying vec3 vPosition;
     varying vec2 vMaterial;
@@ -53,8 +57,13 @@
     }
     void main() {
       vec3 p = rotate(aPosition);
-      float distance = 8.5 - p.z;
-      gl_Position = vec4(p.xy*uScale, 1.0689655*distance-2.0689655, distance);
+      if (uXR) {
+        // WebXR reference-space coordinates are in meters, not screen pixels.
+        gl_Position = uViewProjection * vec4(p*0.30+uXRPosition, 1.0);
+      } else {
+        float distance = 8.5 - p.z;
+        gl_Position = vec4(p.xy*uScale, 1.0689655*distance-2.0689655, distance);
+      }
       vPosition = p;
       vNormal = rotate(aNormal);
       vMaterial = aMaterial;
@@ -63,6 +72,9 @@
     precision mediump float;
     uniform float uTime;
     uniform bool uWireframe;
+    uniform bool uXR;
+    uniform vec3 uEyePosition;
+    uniform vec3 uXRPosition;
     varying vec3 vNormal;
     varying vec3 vPosition;
     varying vec2 vMaterial;
@@ -74,7 +86,8 @@
       vec3 normal = normalize(vNormal);
       if (!gl_FrontFacing) normal = -normal;
       float diffuse = max(0.0, dot(normal, normalize(vec3(-0.4, -0.6, 1.0))));
-      float specular = pow(max(0.0, normal.z), 18.0)*0.38;
+      vec3 eyeDirection = uXR ? normalize(uEyePosition-(vPosition*0.30+uXRPosition)) : vec3(0.0,0.0,1.0);
+      float specular = pow(max(0.0, dot(normal, eyeDirection)), 18.0)*0.38;
       float wave = 0.5+0.5*sin(uTime*1.4+vMaterial.x*6.2831853+vPosition.z*0.45);
       vec3 base = mix(vec3(0.478,0.635,0.969), vec3(0.718,0.631,0.933), 0.16+vMaterial.x*0.38);
       base = mix(base, vec3(0.451,0.890,0.808), wave*0.28);
@@ -137,6 +150,7 @@
     document.querySelectorAll(".controls button, .controls input").forEach(control => { control.disabled = !available; });
     status.textContent = message || "";
     status.hidden = !message;
+    if (xr) xr.refresh();
   }
 
   function release() {
@@ -153,7 +167,7 @@
       gl = canvas.getContext("webgl", { alpha: true, antialias: true, premultipliedAlpha: false });
       if (!gl) throw new Error("WebGL is unavailable");
       sculpture = program(sculptureVertex, sculptureFragment, ["aPosition", "aNormal", "aMaterial"],
-        ["uRotation", "uScale", "uTime", "uWireframe"]);
+        ["uRotation", "uScale", "uTime", "uWireframe", "uXR", "uViewProjection", "uXRPosition", "uEyePosition"]);
       atmosphere = program(atmosphereVertex, atmosphereFragment, ["aPosition", "aSize", "aColor"], ["uRound"]);
       geometryBuffer = gl.createBuffer();
       atmosphereBuffer = gl.createBuffer();
@@ -178,6 +192,7 @@
     gl.bindBuffer(gl.ARRAY_BUFFER, geometryBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, Math.max(mesh.solid.byteLength, mesh.wire.byteLength), gl.DYNAMIC_DRAW);
     meshTime = NaN;
+    uploadedTime = NaN;
   }
 
   function attribute(location, count, stride, offset) {
@@ -257,10 +272,25 @@
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     drawStars(width, height, ratio);
     drawRain(false, width, height);
+    prepareSculpture();
+    drawSculpture(width, height);
+    drawRain(true, width, height);
+  }
+
+  function prepareSculpture() {
     if (meshTime !== state.time) {
       OrbitGeometry.updateMesh(mesh, state.time);
       meshTime = state.time;
     }
+    if (uploadedTime !== state.time || uploadedWireframe !== state.wireframe) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, geometryBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, state.wireframe ? mesh.wire : mesh.solid);
+      uploadedTime = state.time;
+      uploadedWireframe = state.wireframe;
+    }
+  }
+
+  function drawSculpture(width, height, viewProjection, position, eye) {
     gl.useProgram(sculpture.handle);
     if (state.wireframe) {
       gl.disable(gl.DEPTH_TEST);
@@ -271,7 +301,6 @@
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, geometryBuffer);
     const vertices = state.wireframe ? mesh.wire : mesh.solid;
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
     const a = sculpture.attributes, u = sculpture.uniforms;
     attribute(a.aPosition, 3, 8, 0);
     attribute(a.aNormal, 3, 8, 3);
@@ -284,13 +313,18 @@
       2.295 * state.zoom * Math.min(width, height) / height);
     gl.uniform1f(u.uTime, state.time);
     gl.uniform1i(u.uWireframe, state.wireframe ? 1 : 0);
+    gl.uniform1i(u.uXR, viewProjection ? 1 : 0);
+    if (viewProjection) {
+      gl.uniformMatrix4fv(u.uViewProjection, false, viewProjection);
+      gl.uniform3fv(u.uXRPosition, position);
+      gl.uniform3f(u.uEyePosition, eye.x, eye.y, eye.z);
+    }
     gl.drawArrays(state.wireframe ? gl.LINES : gl.TRIANGLES, 0, vertices.length / 8);
     Object.values(a).forEach(location => gl.disableVertexAttribArray(location));
-    drawRain(true, width, height);
   }
 
   function requestRender() {
-    if (frame === null && !lost && !failed && !suspended && !document.hidden) frame = requestAnimationFrame(render);
+    if (frame === null && !xr?.active && !lost && !failed && !suspended && !document.hidden) frame = requestAnimationFrame(render);
   }
   function stopFrame() {
     if (frame !== null) cancelAnimationFrame(frame);
@@ -298,7 +332,7 @@
   }
   function render(timestamp) {
     frame = null;
-    if (lost || failed || suspended || document.hidden) { previousFrame = null; return; }
+    if (xr?.active || lost || failed || suspended || document.hidden) { previousFrame = null; return; }
     if (state.playing && previousFrame !== null) state.time += Math.min(0.1, (timestamp - previousFrame) / 1000) * state.speed;
     previousFrame = state.playing ? timestamp : null;
     try {
@@ -484,6 +518,7 @@
     event.preventDefault();
     lost = true; pointers.clear(); pinch = null;
     stopFrame();
+    if (xr) void xr.end();
     setAvailable(false, "The graphics context was lost. Waiting for WebGL to recover…");
   });
   canvas.addEventListener("webglcontextrestored", () => {
@@ -495,9 +530,13 @@
     else { previousFrame = null; requestRender(); }
   });
   // An iframe removed by Angular must not keep rendering or retain GPU resources.
-  window.addEventListener("pagehide", () => { suspended = true; pointers.clear(); pinch = null; stopFrame(); release(); });
+  window.addEventListener("pagehide", () => {
+    suspended = true; pointers.clear(); pinch = null; stopFrame();
+    if (xr) xr.dispose();
+    release();
+  });
   window.addEventListener("pageshow", event => {
-    if (event.persisted) { suspended = false; initialize(); }
+    if (event.persisted) { suspended = false; initialize(); initializeXR(); }
   });
   function reportSize() {
     // Fullscreen has its own viewport; keep the embedded height unchanged until exit.
@@ -520,4 +559,22 @@
   reportSize();
   syncControls();
   initialize();
+  function initializeXR() {
+    xr = OrbitXR.create({
+      getGL: () => gl,
+      available: () => Boolean(gl && sculpture && !lost && !failed && !suspended),
+      onStart() { stopFrame(); pointers.clear(); pinch = null; },
+      onEnd() { previousFrame = null; reportSize(); requestRender(); },
+      onSelect: togglePlay,
+      onSqueeze: () => setShape((state.shape + 1) % 3),
+      prepareFrame(dt, yaw, pitch) {
+        if (state.playing) state.time += dt * state.speed;
+        state.yaw += yaw;
+        state.pitch = clamp(state.pitch + pitch, -1.4, 1.4);
+        prepareSculpture();
+      },
+      drawView: (projection, position, eye) => drawSculpture(1, 1, projection, position, eye)
+    });
+  }
+  initializeXR();
 })();

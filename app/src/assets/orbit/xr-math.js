@@ -1,0 +1,29 @@
+// Column-major WebXR math, kept independent of the browser for deterministic tests.
+(function (root) {
+  "use strict";
+  function multiply(a, b, out = new Float32Array(16)) {
+    for (let column = 0; column < 4; column++) {
+      for (let row = 0; row < 4; row++) {
+        out[column * 4 + row] = a[row] * b[column * 4] + a[4 + row] * b[column * 4 + 1] +
+          a[8 + row] * b[column * 4 + 2] + a[12 + row] * b[column * 4 + 3];
+      }
+    }
+    return out;
+  }
+  function anchorFromPose(matrix) {
+    // Keep the sculpture upright and world-locked, even when entering VR while
+    // looking down. Use the headset's initial horizontal forward direction.
+    const length = Math.hypot(matrix[8], matrix[10]);
+    return {
+      origin: [matrix[12], matrix[13], matrix[14]],
+      forward: length > 0.001 ? [-matrix[8] / length, 0, -matrix[10] / length] : [0, 0, -1]
+    };
+  }
+  function position(anchor, distance, out = new Float32Array(3)) {
+    for (let i = 0; i < 3; i++) out[i] = anchor.origin[i] + anchor.forward[i] * distance;
+    return out;
+  }
+  const api = { multiply, anchorFromPose, position };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.OrbitXRMath = api;
+})(typeof globalThis !== "undefined" ? globalThis : this);
