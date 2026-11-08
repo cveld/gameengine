@@ -14,9 +14,10 @@
     const nearDistance = 0.85, farDistance = 4.5;
     let firstFrame = true, startupWatchdog = null;
     let compatibilitySession = null;
+    let startupWarning = null, recoveryFrames = 0;
     const mutePressed = new Set();
 
-    function checkGL(stage) {
+    function checkGL(stage, allowStartupWarning = false) {
       const gl = options.getGL(), error = gl.getError();
       if (error === gl.NO_ERROR) return;
       const name = {
@@ -25,7 +26,16 @@
         [gl.INVALID_FRAMEBUFFER_OPERATION]: "INVALID_FRAMEBUFFER_OPERATION",
         [gl.CONTEXT_LOST_WEBGL]: "CONTEXT_LOST_WEBGL"
       }[error] || "UNKNOWN";
-      throw new Error("WebGL 0x" + error.toString(16) + " " + name + " at " + stage);
+      const detail = "WebGL 0x" + error.toString(16) + " " + name + " at " + stage;
+      // A pre-existing error flag is not evidence that our next draw is invalid.
+      // Permit one startup INVALID_OPERATION, then validate actual rendering.
+      if (allowStartupWarning && error === gl.INVALID_OPERATION && startupWarning === null) {
+        startupWarning = detail;
+        console.warn("Orbit XR startup warning:", entries[mode].label, detail);
+        message(entries[mode].label + " startup warning: " + detail + ". Checking the first rendered frame.");
+        return;
+      }
+      throw new Error(detail);
     }
     function diagnose(text, error) {
       console.warn("Orbit XR:", text, error || "");
@@ -183,7 +193,8 @@
         session.addEventListener("select", select);
         session.addEventListener("squeeze", squeeze);
         anchor = null; distance = 1.8; previous = null; ready = true; arOffset.fill(0);
-        firstFrame = true; mutePressed.clear(); watchStartup(starting);
+        firstFrame = true; startupWarning = null; recoveryFrames = 0;
+        mutePressed.clear(); watchStartup(starting);
         document.documentElement.classList.add("xr-active", requestedMode === "immersive-ar" ? "ar-active" : "vr-active");
         frameRequest = session.requestAnimationFrame(onFrame);
       } catch (error) {
@@ -208,6 +219,7 @@
         return;
       }
       try {
+        if (firstFrame) checkGL("XR frame entry", true);
         const pose = frame.getViewerPose(space);
         if (!pose || !pose.views.length) {
           previous = null; options.onVisibility?.(false);
@@ -249,7 +261,7 @@
           for (let i = 0; i < 3; i++) sculpturePosition[i] += arOffset[i];
         }
         // Advance animation and upload geometry once, not once per eye.
-        if (firstFrame) checkGL("before first XR frame");
+        if (firstFrame) checkGL("before first XR frame", true);
         options.prepareFrame(dt, yaw, pitch);
         if (firstFrame) checkGL("geometry upload");
         options.onPose?.(pose.transform.matrix, sculpturePosition);
@@ -291,6 +303,14 @@
           checkGL("first XR frame complete");
           firstFrame = false;
           clearWatchdog();
+          if (startupWarning) {
+            recoveryFrames = 2;
+            message(entries[mode].label + " first-frame checks passed; startup warning: " + startupWarning);
+          }
+        } else if (recoveryFrames > 0) {
+          // Confirm recovery without polling getError throughout every session.
+          checkGL("XR recovery frame complete");
+          recoveryFrames--;
         }
       } catch (error) {
         ready = false;

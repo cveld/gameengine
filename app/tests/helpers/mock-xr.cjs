@@ -177,7 +177,22 @@ module.exports = function installMockXR(config = {}) {
     step(time, x = 0, y = 1.6, z = 0, yaw = 0) {
       const callbacks = Array.from(this.callbacks.values());
       this.callbacks.clear();
-      const frame = { session: this, getViewerPose: () => state.missingPose ? null : pose(x, y, z, yaw) };
+      const injectStartupError = () => {
+        if (config.startupError && (!this.startupErrorInjected || config.repeatStartupError)) {
+          this.startupErrorInjected = true;
+          const gl = this.renderState.baseLayer.gl;
+          if (config.startupError === "INVALID_OPERATION") {
+            // Leave a real error flag without invalidating the current program.
+            const unlinked = gl.createProgram();
+            gl.useProgram(unlinked); gl.deleteProgram(unlinked);
+          } else gl.enable(-1);
+        }
+      };
+      if (!config.startupErrorAfterPose) injectStartupError();
+      const frame = { session: this, getViewerPose: () => {
+        if (config.startupErrorAfterPose) injectStartupError();
+        return state.missingPose ? null : pose(x, y, z, yaw);
+      } };
       callbacks.forEach(callback => callback(time, frame));
     }
     pixels() {

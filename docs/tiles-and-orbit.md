@@ -193,9 +193,10 @@ both eyes were drawn. It could not distinguish setup errors from geometry,
 framebuffer, shader or draw errors. Checks now identify compatibility setup,
 layer setup, frame entry, geometry upload, framebuffer clear, each eye's
 viewport, shader program, vertex attributes, uniforms and `drawArrays`.
-They include the symbolic error name and stop safely rather than ignoring
-`INVALID_OPERATION`. Detailed render checks only run on the first frame,
-not continuously in the headset's render loop.
+They include the symbolic error name; errors produced by rendering stop the
+session. A pre-frame error can use the bounded recovery described below.
+Detailed render checks only run on the first frame, not continuously in the
+headset's render loop.
 
 A separate, reproducible startup bug was fixed: `makeXRCompatible()` may
 legitimately trigger context loss/restoration, but Orbit previously ended
@@ -220,6 +221,41 @@ restoration regression fails against the prior committed assets and passes
 with the fix. Browser tests used the existing built Angular app with updated
 static assets copied in; no new Angular build or dependency/lockfile changes.
 These are Chromium GPU/software-renderer tests, not physical Quest 2 tests.
+
+#### AR pre-frame INVALID_OPERATION follow-up
+
+Following commit `4c74453`, the user reported that **AR now also fails** on
+the Quest 2 with `WebGL 0x502 INVALID_OPERATION at before first XR frame`.
+This supersedes any assumption that the latest AR path is confirmed working.
+It does not demonstrate that WebGL 2 itself is the cause: the checkpoint reads
+an error already pending before the frame's geometry upload, framebuffer clear
+and eye draws. The source of that original error on the headset remains unknown.
+
+The former checkpoint aborted immediately without testing whether the actual
+XR frame could render. A local regression with a real, latched WebGL error
+reproduces that premature abort while leaving valid GPU resources available.
+The renderer now allows **one** startup `INVALID_OPERATION` warning before the
+first draw, records it in the console and entry status, and then runs the
+normal strict framebuffer/upload/program/attribute/uniform/per-eye draw checks.
+Successful first-frame checks are reported alongside the original warning.
+Two subsequent frames are checked once each to reject recurring errors.
+Other error types, repeated warnings before a valid pose, and new rendering
+errors are still fatal. The startup watchdog and context-loss handling remain.
+
+This is a bounded recovery path, not blanket error suppression or a confirmed
+Quest fix. WebGL 2 selection and the VR/AR compositor settings are unchanged;
+no new renderer toggle, dependencies or lockfile changes were introduced.
+Physical AR and VR still need retesting after deployment.
+
+Validation on November 8, 2026: all **91 checks passed** (30 flat-browser,
+45 synthetic XR and 16 geometry/math/sound checks), including the final
+audio adjustment. Eight new XR checks cover bounded recovery on WebGL 1/2
+in VR/AR, a flag appearing during pose retrieval, and rejection of new
+uniform errors, other error types and recurring startup errors. Stereo pixels
+remain nonempty with transparent AR surroundings and opaque VR coverage.
+The pre-frame AR regression fails before this change and passes afterward.
+Tests used updated static assets in the existing Angular build; no new build
+was required. No physical-headset validation was performed by the agent.
 
 Use the asset directly in the Quest browser:
 

@@ -112,6 +112,74 @@ test("VR framebuffer failure returns to the browser with an actionable diagnosti
   });
 });
 
+for (const mode of ["vr", "ar"]) {
+  for (const webgl1Only of [false, true]) {
+    test(`${mode.toUpperCase()} validates stereo output after one pre-frame error on WebGL ${webgl1Only ? 1 : 2}`, async () => {
+      await withXR({ startupError: "INVALID_OPERATION", webgl1Only }, async page => {
+        await start(page, mode);
+        const first = await page.evaluate(() => {
+          mockXR.device.step(100);
+          return { ended: mockXR.device.ended,
+            pixels: mockXR.device.ended ? null : mockXR.device.pixels() };
+        });
+        assert.equal(first.ended, false, "A latched startup error must not prevent validating an otherwise valid frame");
+        assert.equal(first.pixels.error, 0);
+        assert.ok(first.pixels.counts.every(count => count > 5000));
+        if (mode === "ar") assert.ok(first.pixels.transparent.every(count => count > 10000));
+        else assert.deepEqual(first.pixels.transparent, [0, 0]);
+        assert.match(await page.locator("#" + mode + "-status").textContent(),
+          /first-frame checks passed.*startup warning.*0x502 INVALID_OPERATION/);
+        const second = await page.evaluate(() => { mockXR.device.step(200); return mockXR.device.pixels(); });
+        assert.equal(second.error, 0);
+        await page.locator("#enter-" + mode).click();
+        await page.waitForFunction(() => mockXR.device.ended);
+        await start(page, mode);
+        await page.evaluate(() => mockXR.device.step(300));
+        assert.equal(await page.evaluate(() => mockXR.device.ended), false, "A new session gets its own bounded recovery");
+      });
+    });
+  }
+}
+
+test("AR still rejects a genuine uniform error after a pre-frame startup warning", async () => {
+  await withXR({ startupError: "INVALID_OPERATION", failPhase: "shader uniforms" }, async page => {
+    await start(page, "ar");
+    await page.evaluate(() => mockXR.device.step(100));
+    await page.waitForFunction(() => mockXR.device.ended);
+    assert.match(await page.locator("#ar-status").textContent(), /0x502 INVALID_OPERATION at left shader uniforms/);
+  });
+});
+
+test("AR validates a startup flag appearing between pose retrieval and the first draw", async () => {
+  await withXR({ startupError: "INVALID_OPERATION", startupErrorAfterPose: true }, async page => {
+    await start(page, "ar");
+    await page.evaluate(() => mockXR.device.step(100));
+    assert.equal(await page.evaluate(() => mockXR.device.ended), false);
+    assert.match(await page.locator("#ar-status").textContent(), /first-frame checks passed.*before first XR frame/);
+    assert.equal(await page.evaluate(() => mockXR.device.pixels().error), 0);
+  });
+});
+
+test("AR does not tolerate other pre-frame errors", async () => {
+  await withXR({ startupError: "INVALID_ENUM" }, async page => {
+    await start(page, "ar");
+    await page.evaluate(() => mockXR.device.step(100));
+    await page.waitForFunction(() => mockXR.device.ended);
+    assert.match(await page.locator("#ar-status").textContent(), /0x500 INVALID_ENUM/);
+  });
+});
+
+test("AR stops when a startup error recurs instead of accepting an ongoing failure", async () => {
+  await withXR({ startupError: "INVALID_OPERATION", repeatStartupError: true }, async page => {
+    await start(page, "ar");
+    await page.evaluate(() => mockXR.device.step(100));
+    assert.equal(await page.evaluate(() => mockXR.device.ended), false);
+    await page.evaluate(() => mockXR.device.step(200));
+    await page.waitForFunction(() => mockXR.device.ended);
+    assert.match(await page.locator("#ar-status").textContent(), /0x502 INVALID_OPERATION at XR recovery frame complete/);
+  });
+});
+
 for (const phase of ["geometry upload", "shader uniforms", "drawArrays"]) {
   test(`XR reports real INVALID_OPERATION at ${phase} rather than an undifferentiated 0x502`, async () => {
     await withXR({ failPhase: phase }, async page => {
