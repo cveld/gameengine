@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="style.css">
   <script src="geometry.js" defer></script>
   <script src="xr-math.js" defer></script>
+  <script src="xr-hands.js" defer></script>
   <script src="xr.js" defer></script>
   <script src="sound.js" defer></script>
   <script src="orbit.js" defer></script>
@@ -81,6 +82,9 @@
       <dt>Free-roam AR</dt><dd>Experimental unbounded tracking, falling back to local tracking if unavailable. The browser still controls passthrough and safety boundaries. Clear your walking space; keep physical space features enabled on Quest.</dd>
       <dt>AR left thumbstick</dt><dd>Move the sculpture left/right and forward/back relative to your horizontal gaze; release to keep its new position</dd>
       <dt>AR left trigger + thumbstick</dt><dd>Hold the trigger and push up/down to raise/lower the sculpture</dd>
+      <dt>Tracked hands: grab</dt><dd>Open your hand, bring it near the sculpture, then pinch thumb and index finger. Move your hand and release to leave the object there. Either hand works.</dd>
+      <dt>Tracked hands: shape</dt><dd>With your left index finger open and neither hand holding the sculpture, pinch left thumb and middle finger for 0.3 seconds to choose the next shape. Release before repeating.</dd>
+      <dt>Hand tracking</dt><dd>Enable hand tracking on your headset and allow the browser to use it. Controllers remain available. Tracking loss releases the sculpture; open your hand before grabbing again.</dd>
       <dt><kbd>Escape</kbd></dt><dd>Close this dialog</dd>
     </dl>
     <form method="dialog"><button autofocus>Back to the sculpture</button></form>

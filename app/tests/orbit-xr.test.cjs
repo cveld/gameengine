@@ -54,6 +54,90 @@ async function start(page, mode = "vr") {
   await page.waitForFunction(value => document.documentElement.classList.contains(value + "-active"), mode);
 }
 
+for (const mode of ["vr", "ar", "ar-free"]) {
+  test(`Tracked hands grab, place and change shapes in ${mode} without native gesture double-actions`, async () => {
+    await withXR({}, async page => {
+      await start(page, mode);
+      const result = await page.evaluate(mode => {
+        const device = mockXR.device, initialPlay = document.getElementById("play").textContent;
+        const input = { handedness: "right", hand: new Map(["thumb-tip", "index-finger-tip", "middle-finger-tip"]
+          .map(name => [name, { position: [0, 0, 0] }])) };
+        const hand = (x, gap = 0.08, middleGap = 0.08) => {
+          const thumb = [x - gap / 2, 1.6, -1.8];
+          input.hand.get("thumb-tip").position = thumb;
+          input.hand.get("index-finger-tip").position = [x + gap / 2, 1.6, -1.8];
+          input.hand.get("middle-finger-tip").position = [thumb[0] + middleGap, 1.6, -1.8];
+        };
+        device.inputSources = [input];
+        hand(0.4); device.step(100);
+        const initial = mockXR.positions.at(-1);
+        hand(0.4, 0.01); device.step(116);
+        const grabbed = mockXR.positions.at(-1);
+        hand(0.6, 0.01); device.step(132);
+        const moved = mockXR.positions.at(-1);
+        for (const type of ["select", "squeeze"]) {
+          const event = new Event(type); event.inputSource = input; device.dispatchEvent(event);
+        }
+        const play = document.getElementById("play").textContent;
+        const unchangedShape = document.getElementById("shape-name").textContent;
+        hand(0.6); device.step(148);
+        hand(0.9); device.step(164);
+        const placed = mockXR.positions.at(-1);
+        input.handedness = "left";
+        hand(0.9); device.step(200);
+        hand(0.9, 0.08, 0.01);
+        for (const time of [300, 400, 500, 600]) device.step(time);
+        const changedShape = document.getElementById("shape-name").textContent;
+        const afterShape = mockXR.positions.at(-1);
+        if (mode === "ar-free") device.resetOrigin(2, 0, 3, Math.PI / 2);
+        device.inputSources = []; device.step(700);
+        return { initialPlay, play, initial, grabbed, moved, placed, unchangedShape,
+          changedShape, afterShape, final: mockXR.positions.at(-1), error: device.pixels().error,
+          features: mockXR.requests[0].options.optionalFeatures };
+      }, mode);
+      assert.ok(result.features.includes("hand-tracking"));
+      assert.deepEqual(result.grabbed, result.initial, "Grabbing must not snap the center to the fingers");
+      assert.ok(Math.abs(result.moved[0] - result.initial[0] - 0.2) < 1e-5);
+      assert.deepEqual(result.placed, result.moved);
+      assert.deepEqual(result.afterShape, result.placed);
+      assert.deepEqual(result.final, result.placed);
+      assert.equal(result.initialPlay, result.play);
+      assert.equal(result.unchangedShape, "Trefoil knot");
+      assert.equal(result.changedShape, "Rippling torus");
+      assert.equal(result.error, 0);
+    });
+  });
+}
+
+test("Unavailable hand joints leave controller movement, shape and pause actions usable", async () => {
+  await withXR({ noHandAPI: true }, async page => {
+    await start(page, "ar");
+    const result = await page.evaluate(() => {
+      const device = mockXR.device;
+      const controller = { handedness: "left", gamepad: { mapping: "xr-standard",
+        axes: [0, 0, 1, 0], buttons: [] } };
+      const hand = { handedness: "right", hand: new Map([
+        ["thumb-tip", { position: [0, 1.6, -1.8] }],
+        ["index-finger-tip", { position: [0, 1.6, -1.8] }]
+      ]) };
+      device.inputSources = [hand, controller];
+      device.step(100); const initial = mockXR.positions.at(-1);
+      device.step(200); const moved = mockXR.positions.at(-1);
+      for (const type of ["select", "squeeze"]) {
+        const event = new Event(type);
+        event.inputSource = { handedness: "right", gamepad: {} };
+        device.dispatchEvent(event);
+      }
+      return { initial, moved, play: document.getElementById("play").textContent,
+        shape: document.getElementById("shape-name").textContent, ended: device.ended };
+    });
+    assert.ok(result.moved[0] > result.initial[0]);
+    assert.equal(result.play, "Pause");
+    assert.equal(result.shape, "Rippling torus");
+    assert.equal(result.ended, false);
+  });
+});
+
 for (const [config, expected] of [
   [{}, ["unbounded"]],
   [{ failUnbounded: true }, ["unbounded", "local-floor"]],
@@ -68,7 +152,7 @@ for (const [config, expected] of [
           classes: document.documentElement.className };
       });
       assert.equal(result.request.mode, "immersive-ar");
-      assert.deepEqual(result.request.options.optionalFeatures, ["unbounded", "local-floor"]);
+      assert.deepEqual(result.request.options.optionalFeatures, ["unbounded", "local-floor", "hand-tracking"]);
       assert.deepEqual(result.spaces, expected);
       assert.match(result.classes, /ar-active/);
       assert.ok(result.pixels.transparent.every(count => count > 10000));
@@ -86,7 +170,7 @@ for (const [config, expected] of [
       assert.equal(await page.locator("#enter-ar").isDisabled(), false);
       assert.equal(await page.locator("#enter-vr").isDisabled(), false);
       await start(page, "ar");
-      assert.deepEqual(await page.evaluate(() => mockXR.requests.at(-1).options.optionalFeatures), ["local-floor"]);
+      assert.deepEqual(await page.evaluate(() => mockXR.requests.at(-1).options.optionalFeatures), ["local-floor", "hand-tracking"]);
       assert.equal(await page.evaluate(() => document.documentElement.classList.contains("ar-free-active")), false);
     });
   });
@@ -717,7 +801,7 @@ test("XR renders both eyes with different projections, world placement and one u
         viewports: s.viewports, uploads: s.uploads, pixels: s.device.pixels(), requests: s.requests };
     });
     assert.equal(result.requests[0].mode, "immersive-vr");
-    assert.deepEqual(result.requests[0].options.optionalFeatures, ["local-floor"]);
+    assert.deepEqual(result.requests[0].options.optionalFeatures, ["local-floor", "hand-tracking"]);
     assert.equal(result.draws.length, 2);
     assert.ok(result.uploads <= 1);
     assert.deepEqual(result.viewports, [[0, 0, 512, 512], [512, 0, 512, 512]]);

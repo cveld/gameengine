@@ -100,6 +100,8 @@ Assets are self-contained under `app/src/assets/orbit`:
   WebXR rendering and controller input.
 - `xr-math.js`: tested column-major matrix composition and world-locked
   sculpture placement.
+- `xr-hands.js`: optional tracked-joint sampling and tested direct-grab,
+  release, tracking-loss and shape-gesture state machines.
 - `sound.js`: gentle breathing-pulse envelope and locally synthesized spatial
   ambience, with opt-in playback, lifecycle cleanup and no audio downloads.
 - `LICENSE`: the original Orbit MIT license and copyright attribution.
@@ -404,8 +406,8 @@ are limited to +/-3 meters on each horizontal reference-space axis and +/-2
 meters vertically relative to initial placement. These are travel limits, not
 room boundaries or obstacle detection. Tracking/visibility gaps do not cause
 catch-up movement. Reference-space reset or a new session clears the offsets.
-Only `xr-standard` controller input is handled; there is no hand-tracking drag
-gesture. The session has no HTML panels or virtual camera locomotion.
+Controller input uses `xr-standard` mappings. Optional direct hand manipulation
+is described below. The session has no HTML panels or virtual camera locomotion.
 
 This is initial in-air placement, not plane detection or a saved room anchor.
 There is no hit-test placement, room mesh, real-furniture occlusion, collision
@@ -462,6 +464,55 @@ this space for free movement over larger distances; it does not specify a
 Guardian-disable switch. Quest 2 support and the browser's boundary behavior
 while retaining passthrough have not been confirmed. That initial review did not
 change the application; the separate experiment below was subsequently added.
+
+Later on November 9 the user reported that the "create a new boundary here"
+system dialog still appears after the experiment. The selected reference-space
+label was not reported, so this does not establish whether the browser granted
+`unbounded` or Orbit used its fallback. It does establish that the experiment
+has not solved the user's boundary-free AR goal. Do not present it as a fix.
+
+A follow-up online review read the WebXR specification and Meta's OpenXR
+`meta_boundary_visibility.h`. The former defines unbounded tracking, not a
+Quest Boundary/Guardian-disable function. The latter defines the **native**
+`xrRequestBoundaryVisibilityMETA` API and a runtime capability check,
+`supportsBoundaryVisibility`, and permits a suppression-not-allowed result.
+It is not a JavaScript WebXR API; Quest 2 support was not verified. No confirmed
+Quest 2 browser workaround retaining passthrough was found. Do not recommend
+turning off Physical Space Features again given the user's earlier passthrough
+loss. A native application would be a separate investigation, not an extra
+WebXR session option.
+
+#### Working native APK reference
+
+Later on November 9 the user reported a working native APK with full AR and
+no Guardian from another session. That session's latest user feedback confirms
+success after installation of Makepad's MR-only example. Its source was read
+without modifying the other session's active project:
+
+```text
+C:\work\git\github\makepad\makepad\examples\xr\resources\android\README.md
+C:\work\git\github\makepad\makepad\examples\xr\resources\android\AndroidManifest.xml.template
+C:\work\git\github\makepad\makepad\platform\src\os\linux\openxr.rs
+```
+
+The manifest requires `com.oculus.feature.BOUNDARYLESS_APP` and
+`com.oculus.feature.PASSTHROUGH`, and declares
+`com.oculus.permission.BOUNDARY_VISIBILITY`. The native renderer submits system
+passthrough behind transparent virtual content. The other session previously
+reported runtime rejection of its contextual suppression request; the working
+variant subsequently added the MR-only app classification. Do not conflate
+native API support, request acceptance and a boundaryless application manifest,
+or attribute success to `unbounded` tracking.
+
+This is useful positive evidence that native boundaryless AR is possible on
+the user's setup, correcting the earlier lack of a working native reference.
+It is not evidence that Quest Browser exposes equivalent controls to WebXR.
+An Android package manifest is not a web-app manifest or a WebXR session feature.
+The remaining investigation is browser/vendor support for a contextual AR-only
+policy, not whether the headset can do it at all. No confirmed WebXR switch was
+found in this review. A native wrapper would require actual XR integration;
+packaging a web page alone does not establish WebXR support or boundary behavior.
+Keep this MR-only manifest away from opaque VR modes, as its source README warns.
 
 #### Experimental free-roam AR entrance
 
@@ -544,6 +595,61 @@ https://www.w3.org/TR/webxr/
 https://immersive-web.github.io/webxr/spatial-tracking-explainer.html
 https://raw.githubusercontent.com/immersive-web/webxr/main/index.bs
 https://raw.githubusercontent.com/immersive-web/webxr-samples/main/immersive-ar-session.html
+https://raw.githubusercontent.com/meta-quest/Meta-OpenXR-SDK/main/OpenXR/meta_openxr_preview/meta_boundary_visibility.h
+```
+
+#### Hand tracking and direct manipulation
+
+Added on November 9, 2026. All three XR entrances request optional
+`hand-tracking` alongside their existing reference-space features. A runtime
+without hand tracking can still start XR and use controllers. Enable hand
+tracking on the headset and allow browser access; optional-feature requests
+alone do not prove hardware/runtime support.
+
+- Either hand: first open the hand, then pinch thumb/index near the sculpture
+  to grab. Move the pinched hand and open the fingers to place the object.
+  The initial center-to-pinch offset is retained so grabbing does not snap the
+  sculpture's center to the fingers.
+- Left hand: with the index finger open and neither hand grabbing, pinch
+  thumb/middle finger for 0.3 seconds to advance through the three shapes.
+  Release before repeating. This is deliberately distinct from the grab pinch.
+- A 22 mm pinch threshold and 35 mm release threshold reduce flicker. Grab
+  proximity uses an approximate 0.95 m bounding sphere including the sculptures'
+  spikes; this is not exact mesh collision or distant ray selection.
+- Only one hand owns a grab. Direct placement relocates the sculpture's anchor
+  and is not restricted to the controller's +/-3 m adjustment offset. Controller
+  translation waits while a hand owns the object. Rotation, controller shape
+  selection and controller pause retain their existing actions.
+- Missing, denied, emulated or non-finite joint poses release a grab at its last
+  position. Visibility/pose loss, reference-space reset, a frame gap over 250 ms
+  or a hand jump over 0.5 m between samples also release safely. A closed pinch
+  cannot reacquire until an open hand is observed, preventing recovery jumps.
+- Native hand `select`/`squeeze` events are ignored: the hand-input standard
+  allows overlapping pinch actions, which must not also pause or change shape
+  during direct manipulation.
+
+Joints are read with `XRFrame.getJointPose` in the same active reference space as
+the sculpture and stereo eyes. There is no room collision, persistent anchor,
+two-hand scaling, hand-driven rotation or rendered virtual hand mesh. In AR the
+user sees real hands through passthrough; logical hand interaction also works
+in VR but hand meshes are not drawn. No immersive HTML controls are added.
+Physical Quest 2 gesture recognition, permissions and comfort still need testing.
+
+Focused validation: 35 checks passed (29 unit tests, including 13 hand-state/
+sampling checks; one hand-interaction browser check per XR entrance; a
+controller fallback check with unavailable hand joints; the existing VR RGBA
+stereo check; and the 390x844 mobile touch-target/layout check). Browser checks
+used separate fresh-browser invocations and the updated assets copied into the
+existing Angular build. No full browser-suite or new Angular build was run for
+this asset-only change. A Float32 intermediate grab-offset rounding issue was
+fixed and covered explicitly. JavaScript syntax and whitespace checks passed.
+No dependencies or lockfile contents changed.
+
+Primary references read online:
+
+```text
+https://raw.githubusercontent.com/immersive-web/webxr-hand-input/main/index.bs
+https://raw.githubusercontent.com/immersive-web/webxr-samples/main/immersive-hands.html
 ```
 
 AR movement validation on November 8, 2026:
@@ -637,6 +743,7 @@ Run from the repository root with a recent Node runtime (tested with Node 24):
 ```powershell
 node --test app/tests/orbit-geometry.test.cjs
 node --test app/tests/orbit-xr-math.test.cjs
+node --test app/tests/orbit-xr-hands.test.cjs
 node --test app/tests/orbit-sound.test.cjs
 ```
 

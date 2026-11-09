@@ -1,4 +1,4 @@
-/* global OrbitXRMath, XRWebGLLayer */
+/* global OrbitXRMath, OrbitXRHands, XRWebGLLayer */
 (function (root) {
   "use strict";
   function create(options) {
@@ -20,6 +20,7 @@
     let compatibilitySession = null;
     let startupWarning = null, recoveryFrames = 0;
     const mutePressed = new Set();
+    const hands = OrbitXRHands.create();
 
     function checkGL(stage, allowStartupWarning = false) {
       const gl = options.getGL(), error = gl.getError();
@@ -102,7 +103,7 @@
     function cleanup(endedSession) {
       if (session !== endedSession) return;
       const button = entries[entryKey].button;
-      clearWatchdog(); mutePressed.clear();
+      clearWatchdog(); mutePressed.clear(); hands.reset();
       if (frameRequest !== null) session.cancelAnimationFrame(frameRequest);
       frameRequest = null;
       if (resetSpace) resetSpace.removeEventListener("reset", recenter);
@@ -128,15 +129,19 @@
     }
     function onEnd(event) { cleanup(event.target); }
     function select(event) {
+      // Hand pinch events overlap direct manipulation, not play/pause.
+      if (event.inputSource?.hand) return;
       // Reserve the AR left trigger as the height modifier, including release.
       if (mode === "immersive-ar" && event.inputSource?.handedness === "left") return;
       if (ready && session.visibilityState === "visible") options.onSelect();
     }
-    function squeeze() {
+    function squeeze(event) {
+      if (event.inputSource?.hand) return;
       if (ready && session.visibilityState === "visible") options.onSqueeze();
     }
     function recenter(event) {
       if (!session || !ready || disposed) return;
+      hands.reset();
       previous = null;
       if (!entries[entryKey]?.unbounded) {
         anchor = null; distance = 1.8; arOffset.fill(0);
@@ -161,7 +166,7 @@
       }
     }
     function onVisibility() {
-      previous = null; mutePressed.clear();
+      previous = null; mutePressed.clear(); hands.reset();
       options.onVisibility?.(session.visibilityState === "visible");
     }
     async function end() {
@@ -196,7 +201,7 @@
         // requestSession must run directly from the user's click, before any
         // awaits that could consume transient user activation.
         starting = await navigator.xr.requestSession(requestedMode, {
-          optionalFeatures: entry.unbounded ? ["unbounded", "local-floor"] : ["local-floor"]
+          optionalFeatures: entry.unbounded ? ["unbounded", "local-floor", "hand-tracking"] : ["local-floor", "hand-tracking"]
         });
         if (disposed) { await starting.end(); return; }
         session = starting;
@@ -247,7 +252,7 @@
         session.addEventListener("squeeze", squeeze);
         anchor = null; distance = 1.8; previous = null; ready = true; arOffset.fill(0);
         firstFrame = true; startupWarning = null; recoveryFrames = 0;
-        mutePressed.clear(); watchStartup(starting);
+        mutePressed.clear(); hands.reset(); watchStartup(starting);
         document.documentElement.classList.add("xr-active", requestedMode === "immersive-ar" ? "ar-active" : "vr-active");
         if (entry.unbounded) document.documentElement.classList.add("ar-free-active");
         frameRequest = session.requestAnimationFrame(onFrame);
@@ -269,7 +274,7 @@
       if (frame.session !== session || !ready || disposed) return;
       frameRequest = session.requestAnimationFrame(onFrame);
       if (session.visibilityState !== "visible" || !options.available()) {
-        previous = null;
+        previous = null; hands.reset();
         options.onVisibility?.(false);
         return;
       }
@@ -277,14 +282,16 @@
         if (firstFrame) checkGL("XR frame entry", true);
         const pose = frame.getViewerPose(space);
         if (!pose || !pose.views.length) {
-          previous = null; options.onVisibility?.(false);
+          previous = null; hands.reset(); options.onVisibility?.(false);
           return;
         }
-        const dt = previous === null ? 0 : Math.min(0.1, Math.max(0, (timestamp - previous) / 1000));
+        const elapsed = previous === null ? 0 : Math.max(0, (timestamp - previous) / 1000);
+        const dt = Math.min(0.1, elapsed);
         previous = timestamp;
         if (!anchor) anchor = OrbitXRMath.anchorFromPose(pose.transform.matrix);
         let yaw = 0, pitch = 0;
         for (const input of session.inputSources) {
+          if (input.hand) continue;
           // Only xr-standard tracked controllers have these thumbstick axes.
           const gamepad = input.gamepad;
           if (gamepad?.mapping !== "xr-standard" || gamepad.axes.length < 4) continue;
@@ -292,10 +299,10 @@
             const value = gamepad.axes[index];
             return Number.isFinite(value) && Math.abs(value) > 0.18 ? Math.max(-1, Math.min(1, value)) : 0;
           };
-          if (input.handedness === "left" && mode === "immersive-vr") {
+          if (!hands.grabbing && input.handedness === "left" && mode === "immersive-vr") {
             distance = Math.max(nearDistance, Math.min(farDistance, distance + axis(3) * dt * 1.2));
           }
-          if (input.handedness === "left" && mode === "immersive-ar") {
+          if (!hands.grabbing && input.handedness === "left" && mode === "immersive-ar") {
             // xr-standard button 0 is the trigger; axes 2/3 are the thumbstick.
             const heightMode = gamepad.buttons?.[0]?.pressed === true;
             const x = heightMode ? 0 : axis(2), y = -axis(3);
@@ -315,6 +322,14 @@
         if (mode === "immersive-ar") {
           for (let i = 0; i < 3; i++) sculpturePosition[i] += arOffset[i];
         }
+        const gesture = hands.update(OrbitXRHands.read(frame, session.inputSources, space), sculpturePosition, elapsed);
+        if (gesture.position) {
+          // Relocate the anchor, rather than forcing direct hand placement into
+          // the controller's limited adjustment offset. Keep the grab offset.
+          for (let i = 0; i < 3; i++) anchor.origin[i] += gesture.position[i] - sculpturePosition[i];
+          sculpturePosition.set(gesture.position);
+        }
+        if (gesture.changeShape) options.onSqueeze();
         // Advance animation and upload geometry once, not once per eye.
         if (firstFrame) checkGL("before first XR frame", true);
         options.prepareFrame(dt, yaw, pitch);
