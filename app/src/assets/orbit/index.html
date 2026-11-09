@@ -9,6 +9,7 @@
   <script src="geometry.js" defer></script>
   <script src="xr-math.js" defer></script>
   <script src="xr-hands.js" defer></script>
+  <script src="xr-diagnostics.js" defer></script>
   <script src="xr.js" defer></script>
   <script src="sound.js" defer></script>
   <script src="orbit.js" defer></script>
@@ -87,6 +88,16 @@
       <dt>Hand tracking</dt><dd>Enable hand tracking on your headset and allow the browser to use it. Controllers remain available. Tracking loss releases the sculpture; open your hand before grabbing again.</dd>
       <dt><kbd>Escape</kbd></dt><dd>Close this dialog</dd>
     </dl>
+    <section class="xr-tools" aria-labelledby="xr-tools-title">
+      <h3 id="xr-tools-title">XR experiments and diagnostics</h3>
+      <label class="toggle"><input id="ar-minimal" type="checkbox" aria-describedby="ar-minimal-hint"> Minimal AR test</label>
+      <p id="ar-minimal-hint">Applies to Enter AR only: local tracking, no optional features, like the official AR sample. Hand tracking is not requested in this test. Not a Guardian override. Keep passthrough and physical space features enabled.</p>
+      <label for="xr-report">Last XR attempt</label>
+      <textarea id="xr-report" readonly rows="8" spellcheck="false" aria-describedby="xr-report-hint"></textarea>
+      <p id="xr-report-hint">Browser version, actual tracking space, features and startup events. No room or hand positions. Nothing is uploaded; review before sharing.</p>
+      <button id="copy-xr-report" type="button">Copy XR report</button>
+      <p id="xr-copy-status" role="status"></p>
+    </section>
     <form method="dialog"><button autofocus>Back to the sculpture</button></form>
   </dialog>
 </body>

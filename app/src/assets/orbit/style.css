@@ -174,3 +174,22 @@ dd { margin: 0; color: var(--muted); }
 :root.xr-active canvas {
   pointer-events: none;
 }
+
+.xr-tools { border-top: 1px solid #ffffff24; margin: 20px 0; padding-top: 12px; }
+.xr-tools p { font-size: 13px; line-height: 1.5; color: #b6c1d8; overflow-wrap: anywhere; }
+.xr-tools .toggle { display: flex; }
+#xr-report {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-height: 180px;
+  margin: 8px 0;
+  padding: 10px;
+  background: #0b1020;
+  color: #dce4f5;
+  border: 1px solid #ffffff40;
+  border-radius: 8px;
+  font: 12px/1.5 monospace;
+  resize: vertical;
+}

@@ -1,4 +1,4 @@
-/* global OrbitXRMath, OrbitXRHands, XRWebGLLayer */
+/* global OrbitXRMath, OrbitXRHands, OrbitXRDiagnostics, XRWebGLLayer */
 (function (root) {
   "use strict";
   function create(options) {
@@ -21,6 +21,48 @@
     let startupWarning = null, recoveryFrames = 0;
     const mutePressed = new Set();
     const hands = OrbitXRHands.create();
+    const minimalAR = document.getElementById("ar-minimal");
+    const reportField = document.getElementById("xr-report");
+    const copyReport = document.getElementById("copy-xr-report");
+    const copyStatus = document.getElementById("xr-copy-status");
+    const environmentSupport = { "immersive-vr": null, "immersive-ar": null };
+    const diagnostics = OrbitXRDiagnostics.create({
+      userAgent: navigator.userAgent,
+      secureContext: window.isSecureContext,
+      webXR: Boolean(navigator.xr),
+      webGLLayer: typeof XRWebGLLayer !== "undefined",
+      webGL: typeof WebGL2RenderingContext !== "undefined" && options.getGL() instanceof WebGL2RenderingContext ? "WebGL2" : options.getGL() ? "WebGL1" : null,
+      support: environmentSupport
+    });
+    function refreshReport() { reportField.value = diagnostics.text(); }
+    function record(event, detail) { diagnostics.record(event, detail); refreshReport(); }
+    function inputDiagnostics() {
+      if (!session) return;
+      diagnostics.update({ inputs: Array.from(session.inputSources, input => ({
+        handedness: input.handedness, targetRayMode: input.targetRayMode,
+        handInputAvailable: Boolean(input.hand), controllerAvailable: Boolean(input.gamepad)
+      })) });
+      record("input-sources");
+    }
+    async function copyDiagnostics() {
+      refreshReport();
+      // Snapshot on click: a later lifecycle event must not change the copied report.
+      const text = reportField.value;
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+        await navigator.clipboard.writeText(text);
+        copyStatus.textContent = "XR report copied.";
+      } catch (error) {
+        // No deprecated clipboard commands or permission prompts on load.
+        reportField.value = text;
+        reportField.focus(); reportField.select();
+        copyStatus.textContent = "Clipboard unavailable. The report is selected; copy it manually.";
+      }
+    }
+    copyReport.addEventListener("click", copyDiagnostics);
+    const help = document.getElementById("help");
+    help.addEventListener("click", refreshReport);
+    refreshReport();
 
     function checkGL(stage, allowStartupWarning = false) {
       const gl = options.getGL(), error = gl.getError();
@@ -36,6 +78,7 @@
       // Permit one startup INVALID_OPERATION, then validate actual rendering.
       if (allowStartupWarning && error === gl.INVALID_OPERATION && startupWarning === null) {
         startupWarning = detail;
+        record("startup-webgl-warning", detail);
         console.warn("Orbit XR startup warning:", entries[entryKey].label, detail);
         message(entries[entryKey].label + " startup warning: " + detail + ". Checking the first rendered frame.");
         return;
@@ -43,6 +86,8 @@
       throw new Error(detail);
     }
     function diagnose(text, error) {
+      diagnostics.update({ state: "failed" });
+      record("error", text + (error ? ": " + String(error.message || error) : ""));
       console.warn("Orbit XR:", text, error || "");
       message(text + (error ? " (" + String(error.message || error).slice(0, 160) + ")" : ""));
     }
@@ -65,6 +110,7 @@
       if (status) { status.textContent = content; status.hidden = !content; }
     }
     function sync() {
+      minimalAR.disabled = pending || Boolean(session) || disposed;
       for (const [key, entry] of Object.entries(entries)) {
         const active = Boolean(session && entryKey === key);
         entry.button.textContent = (active ? "Exit " : "Enter ") + entry.label;
@@ -86,12 +132,14 @@
         const matching = Object.entries(entries).filter(([, entry]) => entry.mode === sessionMode);
         try {
           const supported = await navigator.xr.isSessionSupported(sessionMode);
+          supportResult(sessionMode, supported);
           for (const [key, entry] of matching) {
             entry.supported = supported;
             if (!disposed && key !== entryKey) message(supported ? "" : "No immersive " + entry.label +
               " support is available. Standard Orbit still works here.", key);
           }
         } catch (error) {
+          supportResult(sessionMode, null);
           for (const [key, entry] of matching) {
             entry.supported = false;
             if (!disposed && key !== entryKey) message(entry.label + " availability could not be checked. Open this page directly in your headset browser.", key);
@@ -100,8 +148,14 @@
       }));
       if (!disposed) sync();
     }
+    function supportResult(sessionMode, supported) {
+      // Support checks describe availability, not successful permission grants.
+      environmentSupport[sessionMode] = supported;
+      refreshReport();
+    }
     function cleanup(endedSession) {
       if (session !== endedSession) return;
+      diagnostics.finish(); refreshReport();
       const button = entries[entryKey].button;
       clearWatchdog(); mutePressed.clear(); hands.reset();
       if (frameRequest !== null) session.cancelAnimationFrame(frameRequest);
@@ -111,6 +165,7 @@
       session.removeEventListener("select", select);
       session.removeEventListener("squeeze", squeeze);
       session.removeEventListener("visibilitychange", onVisibility);
+      session.removeEventListener("inputsourceschange", inputDiagnostics);
       session = layer = space = null;
       resetSpace = null; originCorrections.length = 0;
       mode = entryKey = null; trackingStatus = "";
@@ -141,6 +196,7 @@
     }
     function recenter(event) {
       if (!session || !ready || disposed) return;
+      record("reference-space-reset", event.transform ? "Known origin shift" : "Unknown origin shift");
       hands.reset();
       previous = null;
       if (!entries[entryKey]?.unbounded) {
@@ -166,6 +222,7 @@
       }
     }
     function onVisibility() {
+      record("visibility", session.visibilityState);
       previous = null; mutePressed.clear(); hands.reset();
       options.onVisibility?.(session.visibilityState === "visible");
     }
@@ -177,6 +234,7 @@
         await ending.end();
         cleanup(ending);
       } catch (error) {
+        record("end-rejected", error.message || error);
         if (session === ending) message(entries[endingKey].label +
           " could not close. Use your headset's system menu to exit XR.", endingKey);
       }
@@ -193,6 +251,8 @@
       }
       const entry = entries[requestedKey], requestedMode = entry.mode;
       if (!entry.supported || !options.available()) return;
+      const selectedProfile = OrbitXRDiagnostics.profile(requestedKey, minimalAR.checked);
+      diagnostics.begin(requestedMode, selectedProfile); copyStatus.textContent = ""; refreshReport();
       pending = true; mode = requestedMode; entryKey = requestedKey; trackingStatus = ""; sync(); message("");
       let starting = null;
       try {
@@ -200,13 +260,19 @@
         options.onRequest?.();
         // requestSession must run directly from the user's click, before any
         // awaits that could consume transient user activation.
-        starting = await navigator.xr.requestSession(requestedMode, {
-          optionalFeatures: entry.unbounded ? ["unbounded", "local-floor", "hand-tracking"] : ["local-floor", "hand-tracking"]
-        });
+        starting = await navigator.xr.requestSession(requestedMode,
+          selectedProfile.optionalFeatures.length ? { optionalFeatures: selectedProfile.optionalFeatures } : {});
         if (disposed) { await starting.end(); return; }
         session = starting;
+        diagnostics.update({
+          state: "starting",
+          enabledFeatures: starting.enabledFeatures === undefined ? null : Array.from(starting.enabledFeatures),
+          environmentBlendMode: starting.environmentBlendMode || null
+        });
+        record("session-granted");
         session.addEventListener("end", onEnd);
         session.addEventListener("visibilitychange", onVisibility);
+        session.addEventListener("inputsourceschange", inputDiagnostics);
         options.onStart();
         const gl = options.getGL();
         // A graphics-adapter switch may legitimately lose and restore context.
@@ -229,21 +295,27 @@
         session.updateRenderState({ baseLayer: layer, depthNear: 0.05, depthFar: 30 });
         checkGL("XR layer setup");
         let spaceType = null;
-        for (const type of entry.unbounded ? ["unbounded", "local-floor", "local"] : ["local-floor", "local"]) {
+        for (const type of selectedProfile.spaces) {
           if (session !== starting || disposed) return;
           try {
             const selected = await starting.requestReferenceSpace(type);
             if (session !== starting || disposed) return;
             space = selected; spaceType = type; break;
           } catch (error) {
+            record("reference-space-rejected", type + ": " + String(error.message || error));
             if (type === "local") throw error;
           }
         }
         if (session !== starting || disposed) return;
+        diagnostics.update({ referenceSpace: spaceType, state: "waiting-for-frame" });
+        record("reference-space-selected", spaceType);
         if (entry.unbounded) {
           trackingStatus = (spaceType === "unbounded" ? "Unbounded tracking selected." :
             "Unbounded tracking unavailable; using " + spaceType + " tracking.") +
             " This does not disable the headset safety boundary. Keep passthrough enabled and clear your walking space.";
+          message("");
+        } else if (selectedProfile.name === "minimal-local") {
+          trackingStatus = "Minimal AR: local tracking, no optional features. The browser still controls safety boundaries.";
           message("");
         }
         resetSpace = space;
@@ -258,6 +330,7 @@
         frameRequest = session.requestAnimationFrame(onFrame);
       } catch (error) {
         const detail = String(error.message || error).slice(0, 160);
+        diagnostics.update({ state: "failed" }); record("setup-failed", error.name + ": " + detail);
         console.warn("Orbit XR session setup failed:", requestedMode, error);
         if (starting && session === starting) await end();
         if (!session) { mode = entryKey = null; trackingStatus = ""; }
@@ -372,6 +445,10 @@
           if (!viewsDrawn) throw new Error("No XR eye viewport is available");
           checkGL("first XR frame complete");
           firstFrame = false;
+          diagnostics.update({ state: "rendering", firstFrameRendered: true,
+            handJointPoseAPI: typeof frame.getJointPose === "function" });
+          inputDiagnostics();
+          record("first-frame-rendered", viewsDrawn + " eye viewport(s)");
           clearWatchdog();
           if (startupWarning) {
             recoveryFrames = 2;
@@ -403,6 +480,8 @@
       dispose() {
         disposed = true;
         listeners.forEach(({ button, listener }) => button.removeEventListener("click", listener));
+        copyReport.removeEventListener("click", copyDiagnostics);
+        help.removeEventListener("click", refreshReport);
         if (navigator.xr) navigator.xr.removeEventListener("devicechange", discover);
         void end();
         sync();

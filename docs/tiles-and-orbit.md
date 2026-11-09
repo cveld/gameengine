@@ -102,6 +102,8 @@ Assets are self-contained under `app/src/assets/orbit`:
   sculpture placement.
 - `xr-hands.js`: optional tracked-joint sampling and tested direct-grab,
   release, tracking-loss and shape-gesture state machines.
+- `xr-diagnostics.js`: pure session-profile selection and bounded, locally
+  copyable diagnostics; requested features remain distinct from browser grants.
 - `sound.js`: gentle breathing-pulse envelope and locally synthesized spatial
   ambience, with opt-in playback, lifecycle cleanup and no audio downloads.
 - `LICENSE`: the original Orbit MIT license and copyright attribution.
@@ -514,6 +516,87 @@ found in this review. A native wrapper would require actual XR integration;
 packaging a web page alone does not establish WebXR support or boundary behavior.
 Keep this MR-only manifest away from opaque VR modes, as its source README warns.
 
+#### Minimal AR comparison and browser diagnostics
+
+On November 9, 2026, after the user reported a working native boundaryless APK,
+reviewed primary sources again. The web search tool returned empty output, so
+the official sample/specification and Meta's published native reference were
+retrieved directly over HTTPS instead of relying on search snippets.
+
+The current official `immersive-ar-session.html` requests `immersive-ar` without
+optional features and selects `local` tracking. Orbit's standard AR instead
+requests optional `local-floor` and `hand-tracking`, trying `local-floor` before
+`local`. Added an opt-in **Minimal AR test** under **Shortcuts** to isolate that
+request/reference-space difference. It affects **Enter AR** only, requesting
+no optional features and only `local`. It does not reproduce the entire sample
+renderer or change the existing transparent compositor path. The standard AR,
+VR and free-roam profiles remain unchanged. The checkbox is locked during
+startup and active sessions and is not persisted across reloads.
+
+Minimal AR does not request hand tracking, so use controllers for this A/B
+test. Uncheck it to restore the existing hand-enabled AR experience. It reuses
+standard AR placement/reset behavior, not persistent spatial anchors. Do not
+describe this experiment as guaranteed boundaryless AR.
+
+Meta's native reference describes boundaryless apps as standalone APKs with no
+fully immersive/non-passthrough moments; it separately describes contextual
+suppression with an active passthrough layer. Neither Android manifest flags
+nor `OVRManager` properties are WebXR session features. The WebXR specification
+allows browser/runtime safety overlays and defines `enabledFeatures` as actual
+granted features. No equivalent browser Guardian-disable API was confirmed by
+this review. The native APK remains evidence of native support, not a browser
+capability. Do not add invented `boundaryless` features.
+
+Chromium's current OpenXR implementation distinguishes `local`, `local-floor`
+and `bounded-floor`, with `bounded-floor` mapped to native STAGE and a separate
+local-floor space. Do not assert that requesting `local-floor` necessarily uses
+STAGE or causes Guardian setup. The minimal profile is a controlled comparison,
+not an established diagnosis of the Quest Browser implementation.
+
+The read-only **Last XR attempt** report records browser user agent, secure
+context, WebGL version, mode support, profile, requested versus enabled
+features, selected reference space, blend mode, first rendered frame and input
+capabilities. Unsupported/missing `enabledFeatures` stays `null`, never inferred
+from requested features. Startup warnings, errors, visibility, input changes,
+resets and termination are bounded to 24 events with 200-character details.
+No per-frame DOM logging, room/head/hand poses, device IDs, URLs or telemetry
+fields are collected. Error messages are included; review before sharing.
+The report remains available after failure/exit and starts fresh on retry.
+Copying is opt-in with a selected-text fallback if clipboard access is denied.
+The diagnostics live in the scrollable mobile dialog, not the immersive view.
+
+Quest comparison steps:
+
+1. Leave Physical Space Features and passthrough enabled.
+2. Open **Shortcuts**, enable **Minimal AR test**, close the dialog, then use
+   **Enter AR**. Clear your walking space; do not disregard system warnings.
+3. After exit or a cancelled boundary prompt, open **Shortcuts** and
+   **Copy XR report**. If the prompt blocks session creation, reference space
+   and enabled features may correctly still be unknown.
+4. Repeat with Minimal AR off, and optionally with **Enter free-roam AR**.
+   Compare the reports and whether the system boundary prompt appeared.
+5. A prompt that occurs before the browser returns an XR session cannot be
+   suppressed by later JavaScript reference-space selection.
+
+Primary references retrieved during this review:
+
+```text
+https://raw.githubusercontent.com/immersive-web/webxr-samples/main/immersive-ar-session.html
+https://raw.githubusercontent.com/immersive-web/webxr/main/index.bs
+https://raw.githubusercontent.com/meta-quest/agentic-tools/main/skills/hz-unity-meta-core-sdk/references/boundaryless.md
+https://raw.githubusercontent.com/chromium/chromium/main/device/vr/openxr/openxr_api_wrapper.cc
+```
+
+Validation: 33 pure Node checks passed (geometry, XR math, hands, sound and
+diagnostics), plus 7 focused Chromium cases. The browser cases cover minimal
+local-only AR with transparent stereo, unknown versus granted features and
+input capabilities, denied startup plus both clipboard paths, the 390×844
+mobile dialog, existing AR/free-roam hand gestures, and opaque VR rendering.
+The minimal profile and rendering/gesture regressions used the existing built
+Angular app with updated static assets copied in; no dependency/lockfile or
+Angular wrapper changes and no full rebuild were needed. These are synthetic XR
+checks with real WebGL, not a physical Quest boundaryless-AR confirmation.
+
 #### Experimental free-roam AR entrance
 
 On November 9, 2026, added **Enter free-roam AR** beside the existing VR and AR
@@ -744,6 +827,7 @@ Run from the repository root with a recent Node runtime (tested with Node 24):
 node --test app/tests/orbit-geometry.test.cjs
 node --test app/tests/orbit-xr-math.test.cjs
 node --test app/tests/orbit-xr-hands.test.cjs
+node --test app/tests/orbit-xr-diagnostics.test.cjs
 node --test app/tests/orbit-sound.test.cjs
 ```
 

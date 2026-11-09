@@ -31,7 +31,7 @@ after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
 });
 async function withXR(config, run) {
-  const context = await browser.newContext({ reducedMotion: "reduce", viewport: { width: 1100, height: 850 } });
+  const context = await browser.newContext({ reducedMotion: "reduce", viewport: config.viewport || { width: 1100, height: 850 } });
   const page = await context.newPage(), errors = [];
   page.on("pageerror", error => errors.push(error.message));
   try {
@@ -53,6 +53,100 @@ async function start(page, mode = "vr") {
   await page.locator("#enter-" + mode).click();
   await page.waitForFunction(value => document.documentElement.classList.contains(value + "-active"), mode);
 }
+
+test("Minimal AR uses the official sample's local-only request and renders transparent stereo", async () => {
+  await withXR({ enabledFeatures: ["local", "viewer"] }, async page => {
+    await page.locator("#help").click();
+    await page.locator("#ar-minimal").check();
+    await page.locator("#shortcuts form button").click();
+    await start(page, "ar");
+    const result = await page.evaluate(() => {
+      mockXR.device.step(100);
+      const report = JSON.parse(document.getElementById("xr-report").value);
+      return { request: mockXR.requests[0], spaces: mockXR.spaces, report, pixels: mockXR.device.pixels(),
+        disabled: document.getElementById("ar-minimal").disabled };
+    });
+    assert.deepEqual(result.request, { mode: "immersive-ar", options: {} });
+    assert.deepEqual(result.spaces, ["local"]);
+    assert.equal(result.report.attempt.profile, "minimal-local");
+    assert.deepEqual(result.report.attempt.enabledFeatures, ["local", "viewer"]);
+    assert.equal(result.report.attempt.referenceSpace, "local");
+    assert.equal(result.report.attempt.firstFrameRendered, true);
+    assert.equal(result.report.attempt.environmentBlendMode, "alpha-blend");
+    assert.equal(result.report.environment.support["immersive-ar"], true);
+    assert.equal(result.disabled, true);
+    assert.ok(result.pixels.transparent.every(count => count > 100000));
+    assert.ok(result.pixels.counts.every(count => count > 5000));
+    assert.equal(result.pixels.error, 0);
+    await page.locator("#enter-ar").click();
+    const ended = await page.locator("#xr-report").inputValue();
+    assert.equal(JSON.parse(ended).attempt.state, "ended");
+    assert.equal(await page.locator("#ar-minimal").isEnabled(), true);
+  });
+});
+test("XR report distinguishes unknown grants and captures tracked input without room poses", async () => {
+  await withXR({}, async page => {
+    await start(page, "ar");
+    const result = await page.evaluate(() => {
+      mockXR.device.inputSources = [{ handedness: "right", targetRayMode: "tracked-pointer", hand: new Map() }];
+      mockXR.device.dispatchEvent(new Event("inputsourceschange"));
+      mockXR.device.step(100);
+      return JSON.parse(document.getElementById("xr-report").value);
+    });
+    assert.equal(result.attempt.enabledFeatures, null);
+    assert.equal(result.attempt.referenceSpace, "local-floor");
+    assert.deepEqual(result.attempt.requestedFeatures, ["local-floor", "hand-tracking"]);
+    assert.deepEqual(result.attempt.inputs, [{
+      handedness: "right", targetRayMode: "tracked-pointer", handInputAvailable: true, controllerAvailable: false
+    }]);
+    assert.equal(JSON.stringify(result).includes('"position"'), false);
+    assert.equal(JSON.stringify(result).includes('"matrix"'), false);
+  });
+});
+test("Denied XR report remains copyable with a manual clipboard fallback", async () => {
+  await withXR({ failRequest: true }, async page => {
+    await page.locator("#enter-ar").click();
+    await page.waitForFunction(() => document.getElementById("ar-status").textContent.includes("could not start"));
+    await page.locator("#help").click();
+    const report = JSON.parse(await page.locator("#xr-report").inputValue());
+    assert.equal(report.attempt.state, "failed");
+    assert.equal(report.attempt.referenceSpace, null);
+    assert.ok(report.events.some(event => event.event === "setup-failed"));
+    await page.evaluate(() => Object.defineProperty(navigator, "clipboard", {
+      configurable: true, value: { writeText: async () => { throw new Error("Denied"); } }
+    }));
+    await page.locator("#copy-xr-report").click();
+    await page.waitForFunction(() => document.getElementById("xr-copy-status").textContent.includes("selected"));
+    assert.equal(await page.evaluate(() => {
+      const field = document.getElementById("xr-report");
+      return document.activeElement === field && field.selectionStart === 0 && field.selectionEnd === field.value.length;
+    }), true);
+    await page.evaluate(() => Object.defineProperty(navigator, "clipboard", {
+      configurable: true, value: { writeText: async text => { window.copiedXR = text; } }
+    }));
+    await page.locator("#copy-xr-report").click();
+    await page.waitForFunction(() => document.getElementById("xr-copy-status").textContent.includes("copied"));
+    assert.deepEqual(await page.evaluate(() => JSON.parse(window.copiedXR)), report);
+  });
+});
+test("XR tools fit the mobile dialog with touch-sized controls", async () => {
+  await withXR({ viewport: { width: 390, height: 844 } }, async page => {
+    await page.locator("#help").click();
+    await page.locator("#copy-xr-report").scrollIntoViewIfNeeded();
+    const bounds = await page.evaluate(() => {
+      const dialog = document.getElementById("shortcuts"), rect = dialog.getBoundingClientRect();
+      const report = document.getElementById("xr-report").getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+        overflow: dialog.scrollWidth > dialog.clientWidth, reportRight: report.right,
+        copyHeight: document.getElementById("copy-xr-report").getBoundingClientRect().height,
+        toggleHeight: document.getElementById("ar-minimal").parentElement.getBoundingClientRect().height };
+    });
+    assert.ok(bounds.left >= 0 && bounds.right <= 390 && bounds.top >= 0 && bounds.bottom <= 844);
+    assert.equal(bounds.overflow, false);
+    assert.ok(bounds.reportRight <= bounds.right);
+    assert.ok(bounds.copyHeight >= 44 && bounds.toggleHeight >= 44);
+  });
+});
 
 for (const mode of ["vr", "ar", "ar-free"]) {
   test(`Tracked hands grab, place and change shapes in ${mode} without native gesture double-actions`, async () => {

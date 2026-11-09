@@ -183,6 +183,7 @@ module.exports = function installMockXR(config = {}) {
     constructor(mode) {
       super();
       this.visibilityState = "visible";
+      if (config.enabledFeatures) this.enabledFeatures = config.enabledFeatures;
       this.environmentBlendMode = mode === "immersive-ar" ? (config.arBlendMode || "alpha-blend") : "opaque";
       this.inputSources = [];
       this.renderState = {};
