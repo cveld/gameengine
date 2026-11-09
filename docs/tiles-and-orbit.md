@@ -597,6 +597,71 @@ Angular app with updated static assets copied in; no dependency/lockfile or
 Angular wrapper changes and no full rebuild were needed. These are synthetic XR
 checks with real WebGL, not a physical Quest boundaryless-AR confirmation.
 
+##### Local-only AR with optional hands
+
+Subsequently the user reported that Guardian apparently no longer activates,
+but hand gestures no longer work. No XR report was supplied, so do not claim
+that boundaryless operation is independently confirmed or infer which features
+were granted. With the no-feature minimal profile, missing articulated hand
+input is expected: the hand-input specification requires requesting
+`hand-tracking` to access articulated hand poses.
+
+Added **Hand tracking in minimal AR** as a separate opt-in checkbox under
+**Shortcuts**. Enable **Minimal AR test** first, then enable the hand option,
+close the dialog and start a new **Enter AR** session. This selects profile
+`minimal-local-hands`: optional features `["hand-tracking"]`, reference space
+`local` only. No floor/unbounded feature is reintroduced. Both experiment
+settings are locked during pending/active XR; the hand setting is also disabled
+when minimal AR is off. Leaving the hand option off retains the known
+no-feature comparison. VR/free-roam and standard AR ignore the extra checkbox.
+
+The existing thumb/index grab-and-place and left thumb/middle shape gesture
+logic is reused without changing its thresholds or controller fallback.
+Hand tracking remains optional: denied support does not intentionally reject
+AR. Check `enabledFeatures` and input capabilities in the XR report; a visible
+passthrough image of the user's hands does not establish articulated tracking.
+On the Quest, compare hand response and the boundary prompt with and without
+this one extra feature; neither outcome is guaranteed by the browser API.
+
+The hand-input specification was retrieved directly after the web tool again
+returned empty output:
+
+```text
+https://raw.githubusercontent.com/immersive-web/webxr-hand-input/main/index.bs
+```
+
+##### Visible deployed commit
+
+The user requested a visible commit hash to distinguish published versions.
+The website shell and standalone/embedded Orbit now have a footer version
+label, also included in the XR report. Source/dev-server pages say
+`Commit: development`. `npm run build` runs `scripts/stamp-build.cjs` through
+`postbuild`, stamping the same seven-character commit and full-hash tooltip
+into both built HTML files. Local pending changes add `(local changes)`.
+There is no runtime fetch of a newer version label that could mislabel cached
+older Orbit assets, and no hardcoded self-referential commit in source.
+
+The workflow prepares ignored `.build-commit.json` from `GITHUB_SHA` before
+the hosted build and explicitly uses `npm run build`; prepared metadata is
+the fallback if Git is unavailable in the build container. Missing/duplicate
+HTML markers and invalid hashes fail stamping rather than inventing a version.
+When using the direct Angular CLI, run `node scripts/stamp-build.cjs` afterward.
+This hook uses the project's default `dist/gameengine` output path.
+Orbit's script/style URLs receive the same commit as a cache-busting query;
+Angular production bundles already have content hashes. Reload the page after
+deployment; an older cached HTML document still displays its older label.
+No controls are added to the immersive compositor view.
+
+Validation for these additions: 22 Node tests and 5 focused browser cases
+passed. Coverage includes local-only hand grab/place/shape changes, optional
+hand-feature denial with controller fallback, the original no-feature minimal
+profile, mobile dialog layout, and matching website/iframe commit labels with
+cache-busted asset URLs and the version in the XR report. Workflow YAML was
+parsed successfully. `npm run build` completed with the postbuild stamp:
+718.03 kB initial bundle, above the existing 500 kB warning budget but below the
+1 MB error budget. No dependency or lockfile contents changed. These checks
+do not establish Guardian behavior on the physical Quest.
+
 #### Experimental free-roam AR entrance
 
 On November 9, 2026, added **Enter free-roam AR** beside the existing VR and AR
@@ -683,8 +748,8 @@ https://raw.githubusercontent.com/meta-quest/Meta-OpenXR-SDK/main/OpenXR/meta_op
 
 #### Hand tracking and direct manipulation
 
-Added on November 9, 2026. All three XR entrances request optional
-`hand-tracking` alongside their existing reference-space features. A runtime
+Added on November 9, 2026. The standard profiles for all three XR entrances
+request optional `hand-tracking` alongside their existing reference-space features. A runtime
 without hand tracking can still start XR and use controllers. Enable hand
 tracking on the headset and allow browser access; optional-feature requests
 alone do not prove hardware/runtime support.
@@ -828,6 +893,7 @@ node --test app/tests/orbit-geometry.test.cjs
 node --test app/tests/orbit-xr-math.test.cjs
 node --test app/tests/orbit-xr-hands.test.cjs
 node --test app/tests/orbit-xr-diagnostics.test.cjs
+node --test app/tests/build-version.test.cjs
 node --test app/tests/orbit-sound.test.cjs
 ```
 

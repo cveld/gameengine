@@ -22,11 +22,13 @@
     const mutePressed = new Set();
     const hands = OrbitXRHands.create();
     const minimalAR = document.getElementById("ar-minimal");
+    const minimalHands = document.getElementById("ar-minimal-hands");
     const reportField = document.getElementById("xr-report");
     const copyReport = document.getElementById("copy-xr-report");
     const copyStatus = document.getElementById("xr-copy-status");
     const environmentSupport = { "immersive-vr": null, "immersive-ar": null };
     const diagnostics = OrbitXRDiagnostics.create({
+      buildVersion: document.querySelector("[data-build-version]")?.textContent || "Commit: development",
       userAgent: navigator.userAgent,
       secureContext: window.isSecureContext,
       webXR: Boolean(navigator.xr),
@@ -111,6 +113,7 @@
     }
     function sync() {
       minimalAR.disabled = pending || Boolean(session) || disposed;
+      minimalHands.disabled = minimalAR.disabled || !minimalAR.checked;
       for (const [key, entry] of Object.entries(entries)) {
         const active = Boolean(session && entryKey === key);
         entry.button.textContent = (active ? "Exit " : "Enter ") + entry.label;
@@ -251,7 +254,7 @@
       }
       const entry = entries[requestedKey], requestedMode = entry.mode;
       if (!entry.supported || !options.available()) return;
-      const selectedProfile = OrbitXRDiagnostics.profile(requestedKey, minimalAR.checked);
+      const selectedProfile = OrbitXRDiagnostics.profile(requestedKey, minimalAR.checked, minimalHands.checked);
       diagnostics.begin(requestedMode, selectedProfile); copyStatus.textContent = ""; refreshReport();
       pending = true; mode = requestedMode; entryKey = requestedKey; trackingStatus = ""; sync(); message("");
       let starting = null;
@@ -314,8 +317,10 @@
             "Unbounded tracking unavailable; using " + spaceType + " tracking.") +
             " This does not disable the headset safety boundary. Keep passthrough enabled and clear your walking space.";
           message("");
-        } else if (selectedProfile.name === "minimal-local") {
-          trackingStatus = "Minimal AR: local tracking, no optional features. The browser still controls safety boundaries.";
+        } else if (selectedProfile.name.startsWith("minimal-local")) {
+          trackingStatus = "Minimal AR: local tracking, " +
+            (selectedProfile.optionalFeatures.length ? "optional hand tracking only." : "no optional features.") +
+            " The browser still controls safety boundaries.";
           message("");
         }
         resetSpace = space;
@@ -471,6 +476,7 @@
       return { button: entry.button, listener };
     });
     if (navigator.xr) navigator.xr.addEventListener("devicechange", discover);
+    minimalAR.addEventListener("change", sync);
     void discover();
     return {
       get active() { return Boolean(session); },
@@ -482,6 +488,7 @@
         listeners.forEach(({ button, listener }) => button.removeEventListener("click", listener));
         copyReport.removeEventListener("click", copyDiagnostics);
         help.removeEventListener("click", refreshReport);
+        minimalAR.removeEventListener("change", sync);
         if (navigator.xr) navigator.xr.removeEventListener("devicechange", discover);
         void end();
         sync();

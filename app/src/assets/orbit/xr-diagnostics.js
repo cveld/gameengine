@@ -1,7 +1,10 @@
 (function (root) {
   "use strict";
-  function profile(key, minimal) {
-    if (key === "ar" && minimal) return { optionalFeatures: [], spaces: ["local"], name: "minimal-local" };
+  function profile(key, minimal, minimalHands = false) {
+    if (key === "ar" && minimal) return {
+      optionalFeatures: minimalHands ? ["hand-tracking"] : [],
+      spaces: ["local"], name: minimalHands ? "minimal-local-hands" : "minimal-local"
+    };
     if (key === "ar-free") return {
       optionalFeatures: ["unbounded", "local-floor", "hand-tracking"],
       spaces: ["unbounded", "local-floor", "local"], name: "free-roam"

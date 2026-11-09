@@ -148,10 +148,44 @@ test("XR tools fit the mobile dialog with touch-sized controls", async () => {
   });
 });
 
-for (const mode of ["vr", "ar", "ar-free"]) {
+test("Minimal hand tracking remains optional when the browser grants only local tracking", async () => {
+  await withXR({ enabledFeatures: ["local", "viewer"] }, async page => {
+    await page.locator("#help").click();
+    await page.locator("#ar-minimal").check();
+    await page.locator("#ar-minimal-hands").check();
+    await page.locator("#shortcuts form button").click();
+    await start(page, "ar");
+    const result = await page.evaluate(() => {
+      const device = mockXR.device;
+      device.step(100);
+      for (const type of ["select", "squeeze"]) {
+        const event = new Event(type); event.inputSource = { handedness: "right" };
+        device.dispatchEvent(event);
+      }
+      return { report: JSON.parse(document.getElementById("xr-report").value),
+        request: mockXR.requests[0], spaces: mockXR.spaces, error: device.pixels().error,
+        shape: document.getElementById("shape-name").textContent };
+    });
+    assert.deepEqual(result.request.options, { optionalFeatures: ["hand-tracking"] });
+    assert.deepEqual(result.report.attempt.enabledFeatures, ["local", "viewer"]);
+    assert.equal(result.report.attempt.firstFrameRendered, true);
+    assert.deepEqual(result.spaces, ["local"]);
+    assert.equal(result.shape, "Rippling torus");
+    assert.equal(result.error, 0);
+  });
+});
+
+for (const mode of ["vr", "ar", "ar-free", "ar-minimal-hands"]) {
   test(`Tracked hands grab, place and change shapes in ${mode} without native gesture double-actions`, async () => {
-    await withXR({}, async page => {
-      await start(page, mode);
+    await withXR(mode === "ar-minimal-hands" ? { enabledFeatures: ["local", "hand-tracking"] } : {}, async page => {
+      if (mode === "ar-minimal-hands") {
+        await page.locator("#help").click();
+        assert.equal(await page.locator("#ar-minimal-hands").isDisabled(), true);
+        await page.locator("#ar-minimal").check();
+        await page.locator("#ar-minimal-hands").check();
+        await page.locator("#shortcuts form button").click();
+      }
+      await start(page, mode === "ar-minimal-hands" ? "ar" : mode);
       const result = await page.evaluate(mode => {
         const device = mockXR.device, initialPlay = document.getElementById("play").textContent;
         const input = { handedness: "right", hand: new Map(["thumb-tip", "index-finger-tip", "middle-finger-tip"]
@@ -187,9 +221,20 @@ for (const mode of ["vr", "ar", "ar-free"]) {
         device.inputSources = []; device.step(700);
         return { initialPlay, play, initial, grabbed, moved, placed, unchangedShape,
           changedShape, afterShape, final: mockXR.positions.at(-1), error: device.pixels().error,
-          features: mockXR.requests[0].options.optionalFeatures };
+          features: mockXR.requests[0].options.optionalFeatures, spaces: mockXR.spaces,
+          report: JSON.parse(document.getElementById("xr-report").value),
+          handsDisabled: document.getElementById("ar-minimal-hands").disabled };
       }, mode);
       assert.ok(result.features.includes("hand-tracking"));
+      if (mode === "ar-minimal-hands") {
+        assert.deepEqual(result.features, ["hand-tracking"]);
+        assert.deepEqual(result.spaces, ["local"]);
+        assert.equal(result.report.attempt.profile, "minimal-local-hands");
+        assert.ok(result.report.attempt.enabledFeatures.includes("hand-tracking"));
+        assert.equal(result.handsDisabled, true);
+        await page.locator("#enter-ar").click();
+        assert.equal(await page.locator("#ar-minimal-hands").isEnabled(), true);
+      }
       assert.deepEqual(result.grabbed, result.initial, "Grabbing must not snap the center to the fingers");
       assert.ok(Math.abs(result.moved[0] - result.initial[0] - 0.2) < 1e-5);
       assert.deepEqual(result.placed, result.moved);

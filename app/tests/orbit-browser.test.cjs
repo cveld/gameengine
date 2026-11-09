@@ -12,6 +12,26 @@ let browser, server, origin;
 const errors = [];
 const mime = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png" };
 
+test("Built website and Orbit show the same stamped commit on mobile", { skip: !process.env.ORBIT_TEST_ROOT }, async () => {
+  await withPage({ viewport: { width: 390, height: 844 } }, async page => {
+    const label = await page.locator("[data-build-version]").textContent();
+    assert.match(label, /^Commit: [a-f0-9]{7}( \(local changes\))?$/);
+    const full = await page.locator("[data-build-version]").getAttribute("title");
+    assert.match(full, /^[a-f0-9]{40}( \(local changes\))?$/);
+    assert.ok(await page.locator('script[src^="xr.js"]').getAttribute("src").then(src => src.includes("?v=" + full.slice(0, 40))));
+    await page.goto(origin + "/orbit");
+    assert.equal(await page.locator("body > .build-version [data-build-version]").textContent(), label);
+    const frame = page.frameLocator("app-orbit iframe");
+    await frame.locator("[data-build-version]").waitFor();
+    assert.equal(await frame.locator("[data-build-version]").textContent(), label);
+    assert.equal(await frame.locator("[data-build-version]").getAttribute("title"), full);
+    await frame.locator("#help").click();
+    const report = JSON.parse(await frame.locator("#xr-report").inputValue());
+    assert.equal(report.environment.buildVersion, label);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  });
+});
+
 before(async () => {
   server = http.createServer((req, res) => {
     const pathname = decodeURIComponent(new URL(req.url, "http://localhost").pathname);

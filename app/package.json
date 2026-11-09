@@ -9,6 +9,7 @@
     "start": "ng serve --proxy-config proxy.conf.json --hmr",
     "start:noproxy": "ng serve --hmr",
     "build": "ng build",
+    "postbuild": "node scripts/stamp-build.cjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },

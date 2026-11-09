@@ -9,6 +9,14 @@ test("Minimal AR requests only local tracking without changing VR or free-roam p
   assert.deepEqual(profile("ar-free", true), profile("ar-free", false));
   assert.deepEqual(profile("ar-free", false).spaces, ["unbounded", "local-floor", "local"]);
 });
+test("Minimal AR can add only hand tracking while preserving the no-feature baseline", () => {
+  assert.deepEqual(profile("ar", true, true), {
+    optionalFeatures: ["hand-tracking"], spaces: ["local"], name: "minimal-local-hands"
+  });
+  assert.deepEqual(profile("ar", true, false).optionalFeatures, []);
+  for (const key of ["vr", "ar-free"]) assert.deepEqual(profile(key, true, true), profile(key, false));
+  assert.deepEqual(profile("ar", false, true), profile("ar", false));
+});
 test("Requested features are never reported as granted without browser evidence", () => {
   const diagnostics = create({ support: {} });
   diagnostics.begin("immersive-ar", profile("ar", false));

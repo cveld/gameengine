@@ -57,7 +57,7 @@
         <button id="reset" class="quiet">Reset</button>
       </div>
     </section>
-    <footer><span>Living geometry. Local rendering. No installation needed.</span><span>Adapted from Orbit · <a href="LICENSE">MIT license</a></span></footer>
+    <footer><span>Living geometry. Local rendering. No installation needed.</span><span data-build-version>Commit: development</span><span>Adapted from Orbit · <a href="LICENSE">MIT license</a></span></footer>
   </main>
   <dialog id="shortcuts" aria-labelledby="shortcuts-title">
     <h2 id="shortcuts-title">A few small shortcuts</h2>
@@ -91,7 +91,9 @@
     <section class="xr-tools" aria-labelledby="xr-tools-title">
       <h3 id="xr-tools-title">XR experiments and diagnostics</h3>
       <label class="toggle"><input id="ar-minimal" type="checkbox" aria-describedby="ar-minimal-hint"> Minimal AR test</label>
-      <p id="ar-minimal-hint">Applies to Enter AR only: local tracking, no optional features, like the official AR sample. Hand tracking is not requested in this test. Not a Guardian override. Keep passthrough and physical space features enabled.</p>
+      <p id="ar-minimal-hint">Applies to Enter AR only: local tracking, no optional features by default, like the official AR sample. Not a Guardian override. Keep passthrough and physical space features enabled.</p>
+      <label class="toggle"><input id="ar-minimal-hands" type="checkbox" aria-describedby="ar-minimal-hands-hint" disabled> Hand tracking in minimal AR</label>
+      <p id="ar-minimal-hands-hint">Request hand tracking only, without floor or unbounded tracking. Allow hand access on your headset, then start a new AR session. Compare whether the safety boundary remains absent; hand support is not guaranteed.</p>
       <label for="xr-report">Last XR attempt</label>
       <textarea id="xr-report" readonly rows="8" spellcheck="false" aria-describedby="xr-report-hint"></textarea>
       <p id="xr-report-hint">Browser version, actual tracking space, features and startup events. No room or hand positions. Nothing is uploaded; review before sharing.</p>

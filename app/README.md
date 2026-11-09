@@ -14,6 +14,14 @@ Run `ng generate component component-name` to generate a new component. You can 
 
 Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
 
+Use `npm run build` for publishable builds: its `postbuild` hook stamps the
+checkout's commit into the website footer and Orbit footer. The full hash is
+available as a tooltip; local pending changes are labeled explicitly. Direct
+`ng build` skips this hook, so follow it with `node scripts/stamp-build.cjs`.
+Source/dev-server pages show `Commit: development`, not a fabricated commit.
+CI prepares ignored `.build-commit.json` metadata before the hosted build so
+stamping still works when the build container does not retain `.git`.
+
 ## Running unit tests
 
 Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
