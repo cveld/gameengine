@@ -4,7 +4,7 @@ module.exports = function installMockXR(config = {}) {
   const state = {
     supported: config.supported !== false, arSupported: config.arSupported !== false,
     requests: [], sessions: [], draws: [], layerOptions: [], contextRequests: [],
-    uploads: 0, viewports: [], matrices: [], positions: [], spaces: [], pulses: [],
+    uploads: 0, viewports: [], matrices: [], positions: [], spaces: [], offsets: [], pulses: [],
     failRequest: Boolean(config.failRequest), failSetup: Boolean(config.failSetup),
     failFloor: Boolean(config.failFloor), missingPose: false, device: null
   };
@@ -124,6 +124,42 @@ module.exports = function installMockXR(config = {}) {
   }
   window.XRWebGLLayer = MockLayer;
   const identity = () => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  function multiply(a, b) {
+    const out = new Array(16).fill(0);
+    for (let column = 0; column < 4; column++) {
+      for (let row = 0; row < 4; row++) {
+        for (let k = 0; k < 4; k++) out[column * 4 + row] += a[k * 4 + row] * b[column * 4 + k];
+      }
+    }
+    return out;
+  }
+  function inverse(matrix) {
+    const out = identity();
+    for (let column = 0; column < 3; column++) {
+      for (let row = 0; row < 3; row++) out[column * 4 + row] = matrix[row * 4 + column];
+    }
+    for (let row = 0; row < 3; row++) {
+      out[12 + row] = -(out[row] * matrix[12] + out[4 + row] * matrix[13] + out[8 + row] * matrix[14]);
+    }
+    return out;
+  }
+  function rigid(matrix) {
+    return { matrix, inverse: { matrix: inverse(matrix) } };
+  }
+  class MockReferenceSpace extends EventTarget {
+    constructor(session, offset = identity()) {
+      super(); this.session = session; this.offset = offset;
+      session.referenceSpaces.push(this);
+    }
+    world() { return multiply(this.session.nativeOrigin, this.offset); }
+    getOffsetReferenceSpace(transform) {
+      state.offsets.push(Array.from(transform.matrix));
+      if (config.failOffset) throw new Error("Synthetic offset failure");
+      const replacement = new MockReferenceSpace(this.session, multiply(this.offset, transform.matrix));
+      this.session.space = replacement;
+      return replacement;
+    }
+  }
   function pose(x = 0, y = 1.6, z = 0, yaw = 0) {
     const transform = identity();
     const c = Math.cos(yaw), s = Math.sin(yaw);
@@ -153,13 +189,26 @@ module.exports = function installMockXR(config = {}) {
       this.callbacks = new Map();
       this.nextId = 0;
       this.ended = false;
+      this.nativeOrigin = identity();
+      this.referenceSpaces = [];
     }
     updateRenderState(value) { Object.assign(this.renderState, value); }
     async requestReferenceSpace(type) {
       state.spaces.push(type);
+      if (type === "unbounded" && config.failUnbounded) throw new Error("Unbounded is unavailable");
       if (type === "local-floor" && state.failFloor) throw new Error("No floor");
-      this.space = new EventTarget();
+      if (config.deferSpace) await new Promise(resolve => { state.finishSpace = resolve; });
+      this.space = new MockReferenceSpace(this);
       return this.space;
+    }
+    resetOrigin(x, y, z, yaw = 0, known = true) {
+      const spaces = this.referenceSpaces.map(space => ({ space, oldWorld: space.world() }));
+      this.nativeOrigin = pose(x, y, z, yaw).transform.matrix;
+      for (const { space, oldWorld } of spaces) {
+        const event = new Event("reset");
+        event.transform = known ? rigid(multiply(inverse(oldWorld), space.world())) : null;
+        space.dispatchEvent(event);
+      }
     }
     requestAnimationFrame(callback) {
       const id = ++this.nextId;
@@ -189,9 +238,12 @@ module.exports = function installMockXR(config = {}) {
         }
       };
       if (!config.startupErrorAfterPose) injectStartupError();
-      const frame = { session: this, getViewerPose: () => {
+      const frame = { session: this, getViewerPose: reference => {
         if (config.startupErrorAfterPose) injectStartupError();
-        return state.missingPose ? null : pose(x, y, z, yaw);
+        if (state.missingPose) return null;
+        const physical = pose(x, y, z, yaw).transform.matrix;
+        const local = multiply(inverse(reference.world()), physical);
+        return pose(local[12], local[13], local[14], Math.atan2(local[8], local[0]));
       } };
       callbacks.forEach(callback => callback(time, frame));
     }

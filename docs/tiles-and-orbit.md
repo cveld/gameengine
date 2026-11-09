@@ -460,15 +460,90 @@ request the optional `unbounded` feature and try an `unbounded` reference space,
 falling back to the current local-floor/local path if unavailable. WebXR defines
 this space for free movement over larger distances; it does not specify a
 Guardian-disable switch. Quest 2 support and the browser's boundary behavior
-while retaining passthrough have not been confirmed. No application change was
-made. A future experiment must report the actual selected space and preserve
-placement across reference-origin changes; do not label a fallback boundary-free.
+while retaining passthrough have not been confirmed. That initial review did not
+change the application; the separate experiment below was subsequently added.
+
+#### Experimental free-roam AR entrance
+
+On November 9, 2026, added **Enter free-roam AR** beside the existing VR and AR
+buttons. This still requests `immersive-ar`, never a VR session or a native
+Boundary/Guardian override. Both AR entrances share the AR capability check.
+The normal AR/VR entrances retain their existing optional `local-floor` feature
+and `local-floor` / `local` reference-space selection.
+
+The experimental entrance requests optional features `unbounded` and
+`local-floor`, then tries reference spaces in this order:
+
+1. `unbounded`;
+2. `local-floor` if unbounded is unavailable;
+3. `local` if floor tracking is also unavailable.
+
+Its status reports the actual selected space, explicitly identifies fallback,
+and warns that it does not disable the headset safety boundary. Keep Quest
+Physical Space Features enabled to retain passthrough. The same transparent
+RGBA stereo renderer, controller object movement, animation and opt-in spatial
+sound are used. No controls are added to the immersive headset view. Only the
+active entrance becomes an exit button; other entrances cannot start a second
+session. Exit returns keyboard focus to the entrance used.
+
+Known reference-origin resets preserve the entire scene coordinate system
+through an offset reference space, retaining placement, orientation and
+controller/audio coordinates. The reset listener stays on the original,
+un-offset space so every reset has an unambiguous native-origin frame.
+Inverse corrections are composed newest-first when rebuilding the scene space;
+translations and rotations do not commute. This work happens only on significant
+resets, not each frame. The time delta is cleared to prevent held input
+from causing an extra movement step immediately after a reset. This behavior
+also applies when the experimental entrance falls back to local tracking.
+Normal AR/VR retain their existing recenter-on-reset behavior.
+
+The current WebXR specification defines `XRReferenceSpaceEvent.transform` as
+the **post-event native origin in the pre-event coordinate system**. Therefore
+the replacement uses `getOffsetReferenceSpace(event.transform.inverse)` to
+cancel the change. The samples' `immersive-ar-session.html` reset handler fetched
+on November 9 passes `evt.transform` directly; that detail was not copied.
+Synthetic translation-plus-rotation tests exercise the specified direction and
+compare both eye view-projection matrices, not just the sculpture position.
+
+If the runtime cannot supply a reset transform, or offset creation fails, the
+experiment ends with an actionable message instead of silently moving the object
+to a potentially unsafe new location. Re-enter to place it again. Unbounded
+tracking may drift gradually without a reset event; this is not a persistent
+real-world anchor implementation and does not guarantee tracking stability over
+large areas. Orbit cannot detect obstacles or change Quest system safety policy.
+Actual unbounded support, passthrough, audio and boundary behavior on Quest 2
+still require on-device verification; synthetic tests are not headset evidence.
+
+Focused validation on November 9, 2026:
+
+- 16 geometry, XR-math and sound unit tests passed.
+- 12 new free-roam AR checks passed, including both reference-space fallbacks,
+  repeated translated/rotated origins, controller placement across a reset,
+  resets before placement, re-entry, unavailable AR, opaque passthrough rejection,
+  startup diagnostics and ending during reference-space negotiation.
+- Existing normal VR opaque stereo and AR transparent stereo checks passed.
+- All seven 44-pixel mobile touch-target/layout sizes passed, as did the built
+  Angular `/orbit` iframe auto-height/rotation check.
+- JavaScript syntax checks and `git diff --check` passed. No dependency or
+  lockfile changes were made; working-copy CRLF endings were preserved.
+
+These are 38 distinct focused checks, not a rerun of the full 103-check suite.
+The monolithic reused-browser run was stopped after repeated navigation
+timeouts before the page DOM existed, including on unchanged flat-view tests.
+Focused cases were then run in separate Node invocations with a fresh browser.
+One `local-floor` case still timed out during navigation but passed on rerun;
+the final repeated-origin test was also rerun after the original-space listener
+and correction composition were finalized. Do not treat these local browser
+startup failures as proof of a Quest rendering issue, or relax the production
+XR startup watchdog to make a synthetic test pass.
 
 Specification references:
 
 ```text
 https://www.w3.org/TR/webxr/
 https://immersive-web.github.io/webxr/spatial-tracking-explainer.html
+https://raw.githubusercontent.com/immersive-web/webxr/main/index.bs
+https://raw.githubusercontent.com/immersive-web/webxr-samples/main/immersive-ar-session.html
 ```
 
 AR movement validation on November 8, 2026:

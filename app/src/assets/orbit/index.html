@@ -19,6 +19,7 @@
       <div class="header-actions">
         <button id="enter-vr" class="quiet" aria-pressed="false" aria-describedby="vr-status" disabled>Enter VR</button>
         <button id="enter-ar" class="quiet" aria-pressed="false" aria-describedby="ar-status" title="Passthrough AR: a floating sculpture in your room. Clear space before walking around it." disabled>Enter AR</button>
+        <button id="enter-ar-free" class="quiet" aria-pressed="false" aria-describedby="ar-free-status" title="Experimental unbounded AR tracking, with local tracking fallback. This does not disable the headset safety boundary. Keep passthrough enabled and clear your walking space." disabled>Enter free-roam AR</button>
         <button id="sound" class="quiet" aria-pressed="false" aria-describedby="sound-status" title="Enable a quiet synthesized spatial soundscape. Click the right thumbstick in XR to mute.">Sound off</button>
         <button id="fullscreen" class="quiet" aria-pressed="false" aria-describedby="fullscreen-status" title="Immersive fullscreen. Tap the sculpture to show controls.">Fullscreen</button>
         <button id="hide-controls" class="quiet">Hide controls</button>
@@ -27,6 +28,7 @@
       <p id="fullscreen-status" class="fullscreen-status" role="status" hidden></p>
       <p id="vr-status" class="fullscreen-status" role="status" hidden></p>
       <p id="ar-status" class="fullscreen-status" role="status" hidden></p>
+      <p id="ar-free-status" class="fullscreen-status" role="status" hidden></p>
       <p id="sound-status" class="fullscreen-status" role="status" hidden></p>
     </header>
     <section class="stage" aria-label="Sculpture viewer">
@@ -76,6 +78,7 @@
       <dt>Sound / Pulse</dt><dd>Enable quiet ambient sound or gentle breathing geometry; pause stops both</dd>
       <dt>Headset system menu</dt><dd>Exit VR / AR and return to the browser</dd>
       <dt>AR mode</dt><dd>See your room and physically walk around the fixed floating sculpture</dd>
+      <dt>Free-roam AR</dt><dd>Experimental unbounded tracking, falling back to local tracking if unavailable. The browser still controls passthrough and safety boundaries. Clear your walking space; keep physical space features enabled on Quest.</dd>
       <dt>AR left thumbstick</dt><dd>Move the sculpture left/right and forward/back relative to your horizontal gaze; release to keep its new position</dd>
       <dt>AR left trigger + thumbstick</dt><dd>Hold the trigger and push up/down to raise/lower the sculpture</dd>
       <dt><kbd>Escape</kbd></dt><dd>Close this dialog</dd>

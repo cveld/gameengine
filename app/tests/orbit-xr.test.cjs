@@ -43,8 +43,9 @@ async function withXR(config, run) {
     await run(page);
     assert.deepEqual(errors, []);
   } catch (error) {
-    console.error("XR test status:", await page.locator("#status").textContent(),
-      await page.locator("#vr-status").textContent(), errors);
+    const statuses = await Promise.all(["status", "vr-status", "ar-free-status"].map(id =>
+      page.locator("#" + id).textContent({ timeout: 1000 }).catch(() => "(page unavailable)")));
+    console.error("XR test status:", page.url(), ...statuses, errors, error.message);
     throw error;
   } finally { await context.close(); }
 }
@@ -52,6 +53,168 @@ async function start(page, mode = "vr") {
   await page.locator("#enter-" + mode).click();
   await page.waitForFunction(value => document.documentElement.classList.contains(value + "-active"), mode);
 }
+
+for (const [config, expected] of [
+  [{}, ["unbounded"]],
+  [{ failUnbounded: true }, ["unbounded", "local-floor"]],
+  [{ failUnbounded: true, failFloor: true }, ["unbounded", "local-floor", "local"]]
+]) {
+  test(`Free-roam AR selects ${expected.at(-1)} tracking with honest boundary messaging`, async () => {
+    await withXR(config, async page => {
+      await start(page, "ar-free");
+      const result = await page.evaluate(() => {
+        mockXR.device.step(100);
+        return { request: mockXR.requests[0], spaces: mockXR.spaces, pixels: mockXR.device.pixels(),
+          classes: document.documentElement.className };
+      });
+      assert.equal(result.request.mode, "immersive-ar");
+      assert.deepEqual(result.request.options.optionalFeatures, ["unbounded", "local-floor"]);
+      assert.deepEqual(result.spaces, expected);
+      assert.match(result.classes, /ar-active/);
+      assert.ok(result.pixels.transparent.every(count => count > 10000));
+      assert.ok(result.pixels.counts.every(count => count > 5000));
+      assert.equal(result.pixels.error, 0);
+      const status = await page.locator("#ar-free-status").textContent();
+      assert.match(status, /does not disable the headset safety boundary/);
+      assert.match(status, expected.length === 1 ? /Unbounded tracking selected/ :
+        new RegExp(`Unbounded tracking unavailable; using ${expected.at(-1)} tracking`));
+      assert.equal(await page.locator("#enter-ar").isDisabled(), true);
+      assert.equal(await page.locator("#enter-vr").isDisabled(), true);
+      await page.locator("#enter-ar-free").click();
+      await page.waitForFunction(() => !document.documentElement.classList.contains("xr-active"));
+      assert.equal(await page.evaluate(() => document.activeElement.id), "enter-ar-free");
+      assert.equal(await page.locator("#enter-ar").isDisabled(), false);
+      assert.equal(await page.locator("#enter-vr").isDisabled(), false);
+      await start(page, "ar");
+      assert.deepEqual(await page.evaluate(() => mockXR.requests.at(-1).options.optionalFeatures), ["local-floor"]);
+      assert.equal(await page.evaluate(() => document.documentElement.classList.contains("ar-free-active")), false);
+    });
+  });
+}
+
+test("Free-roam AR keeps scene coordinates and stereo orientation through repeated origin translations and rotations", async () => {
+  await withXR({}, async page => {
+    await start(page, "ar-free");
+    const result = await page.evaluate(() => {
+      const device = mockXR.device;
+      device.step(100);
+      const initial = { position: mockXR.positions.at(-1), matrices: mockXR.matrices.slice(-2) };
+      device.resetOrigin(5, 0.3, -2, Math.PI / 3);
+      device.step(200);
+      const first = { position: mockXR.positions.at(-1), matrices: mockXR.matrices.slice(-2) };
+      device.resetOrigin(-3, -0.2, 4, -Math.PI / 2);
+      device.step(300);
+      const second = { position: mockXR.positions.at(-1), matrices: mockXR.matrices.slice(-2) };
+      device.step(400, 8, 1.6, 8, Math.PI / 4);
+      return { initial, first, second, walked: mockXR.positions.at(-1), offsets: mockXR.offsets,
+        ended: device.ended };
+    });
+    assert.deepEqual(result.first.position, result.initial.position);
+    assert.deepEqual(result.second.position, result.initial.position);
+    assert.deepEqual(result.walked, result.initial.position, "Head movement must never move or clamp the sculpture");
+    for (const frame of [result.first, result.second]) {
+      frame.matrices.forEach((matrix, eye) => matrix.forEach((value, i) =>
+        assert.ok(Math.abs(value - result.initial.matrices[eye][i]) < 1e-5)));
+    }
+    assert.equal(result.offsets.length, 3, "The newest native-origin correction must precede the older correction");
+    assert.equal(result.ended, false);
+  });
+});
+
+test("Free-roam AR retains controller placement and drops the reset frame time delta", async () => {
+  await withXR({ failUnbounded: true }, async page => {
+    await start(page, "ar-free");
+    const result = await page.evaluate(() => {
+      const device = mockXR.device;
+      device.inputSources = [{ handedness: "left", gamepad: { mapping: "xr-standard", axes: [0, 0, 1, 0], buttons: [] } }];
+      device.step(0); device.step(100);
+      const moved = mockXR.positions.at(-1);
+      device.resetOrigin(3, 0, 2, Math.PI / 2); device.step(10000);
+      const reset = mockXR.positions.at(-1);
+      device.step(10100);
+      const resumed = mockXR.positions.at(-1);
+      return { moved, reset, resumed };
+    });
+    assert.deepEqual(result.reset, result.moved);
+    assert.ok(Math.abs(result.resumed[0] - result.moved[0] - 0.06) < 1e-5);
+    assert.ok(Math.abs(result.resumed[2] - result.moved[2]) < 1e-5);
+  });
+});
+
+test("Free-roam AR handles an origin reset before initial placement and starts fresh on re-entry", async () => {
+  await withXR({}, async page => {
+    await start(page, "ar-free");
+    const first = await page.evaluate(() => {
+      mockXR.device.resetOrigin(2, 0, 3, Math.PI / 2);
+      mockXR.device.step(100);
+      return mockXR.positions.at(-1);
+    });
+    assert.ok(Math.abs(first[0]) < 1e-5);
+    assert.ok(Math.abs(first[2] + 1.8) < 1e-5);
+    await page.locator("#enter-ar-free").click();
+    await start(page, "ar-free");
+    const fresh = await page.evaluate(() => {
+      mockXR.device.step(0, 2, 1.7, 3);
+      return mockXR.positions.at(-1);
+    });
+    assert.ok(Math.abs(fresh[0] - 2) < 1e-5);
+    assert.ok(Math.abs(fresh[2] - 1.2) < 1e-5);
+  });
+});
+
+for (const config of [{}, { failOffset: true }]) {
+  test(`Free-roam AR returns safely when a reset ${config.failOffset ? "cannot be compensated" : "has an unknown transform"}`, async () => {
+    await withXR(config, async page => {
+      await start(page, "ar-free");
+      await page.evaluate(known => {
+        mockXR.device.step(100);
+        mockXR.device.resetOrigin(3, 0, 2, 0, known);
+      }, Boolean(config.failOffset));
+      await page.waitForFunction(() => mockXR.device.ended);
+      assert.match(await page.locator("#ar-free-status").textContent(), /tracking changed.*Returning to the browser/);
+      assert.equal(await page.evaluate(() => mockXR.device.callbacks.size), 0);
+      assert.equal(await page.locator("#enter-ar-free").isDisabled(), false);
+    });
+  });
+}
+
+test("Free-roam AR shares AR capability checks", async () => {
+  await withXR({ arSupported: false }, async page => {
+    assert.equal(await page.locator("#enter-ar").isDisabled(), true);
+    assert.equal(await page.locator("#enter-ar-free").isDisabled(), true);
+    assert.match(await page.locator("#ar-free-status").textContent(), /No immersive.*support/);
+  });
+});
+
+test("Free-roam AR rejects opaque passthrough and never requests VR as a fallback", async () => {
+  await withXR({ arBlendMode: "opaque" }, async page => {
+    await page.locator("#enter-ar-free").click();
+    await page.waitForFunction(() => mockXR.device?.ended);
+    assert.match(await page.locator("#ar-free-status").textContent(), /cannot display the real environment/);
+    assert.deepEqual(await page.evaluate(() => mockXR.requests.map(request => request.mode)), ["immersive-ar"]);
+  });
+});
+
+test("Free-roam AR startup warnings preserve selected tracking information", async () => {
+  await withXR({ startupError: "INVALID_OPERATION" }, async page => {
+    await start(page, "ar-free");
+    await page.evaluate(() => mockXR.device.step(100));
+    assert.match(await page.locator("#ar-free-status").textContent(), /Unbounded tracking selected.*first-frame checks passed/);
+  });
+});
+
+test("Free-roam AR cannot resurrect a session ended during reference-space negotiation", async () => {
+  await withXR({ deferSpace: true }, async page => {
+    await page.locator("#enter-ar-free").click();
+    await page.waitForFunction(() => Boolean(mockXR.finishSpace));
+    assert.equal(await page.locator("#enter-ar").isDisabled(), true);
+    assert.equal(await page.locator("#enter-vr").isDisabled(), true);
+    await page.evaluate(async () => { await mockXR.device.end(); mockXR.finishSpace(); });
+    await page.waitForFunction(() => !document.getElementById("enter-ar-free").disabled);
+    assert.equal(await page.evaluate(() => mockXR.device.callbacks.size), 0);
+    assert.equal(await page.evaluate(() => document.documentElement.classList.contains("xr-active")), false);
+  });
+});
 
 test("VR uses an RGBA layer without optional MSAA/compositor depth and draws opaque stereo output", async () => {
   await withXR({ requireRGBA: true }, async page => {

@@ -3,10 +3,14 @@
   "use strict";
   function create(options) {
     const entries = {
-      "immersive-vr": { button: document.getElementById("enter-vr"), status: document.getElementById("vr-status"), label: "VR", supported: false },
-      "immersive-ar": { button: document.getElementById("enter-ar"), status: document.getElementById("ar-status"), label: "AR", supported: false }
+      vr: { button: document.getElementById("enter-vr"), status: document.getElementById("vr-status"), label: "VR", mode: "immersive-vr", supported: false },
+      ar: { button: document.getElementById("enter-ar"), status: document.getElementById("ar-status"), label: "AR", mode: "immersive-ar", supported: false },
+      "ar-free": { button: document.getElementById("enter-ar-free"), status: document.getElementById("ar-free-status"), label: "free-roam AR", mode: "immersive-ar", supported: false, unbounded: true }
     };
     let mode = null, pending = false, session = null, layer = null, space = null;
+    let entryKey = null, trackingStatus = "";
+    let resetSpace = null;
+    const originCorrections = [];
     let disposed = false, ready = false, frameRequest = null, previous = null, anchor = null;
     let distance = 1.8;
     const viewProjection = new Float32Array(16), sculpturePosition = new Float32Array(3);
@@ -31,8 +35,8 @@
       // Permit one startup INVALID_OPERATION, then validate actual rendering.
       if (allowStartupWarning && error === gl.INVALID_OPERATION && startupWarning === null) {
         startupWarning = detail;
-        console.warn("Orbit XR startup warning:", entries[mode].label, detail);
-        message(entries[mode].label + " startup warning: " + detail + ". Checking the first rendered frame.");
+        console.warn("Orbit XR startup warning:", entries[entryKey].label, detail);
+        message(entries[entryKey].label + " startup warning: " + detail + ". Checking the first rendered frame.");
         return;
       }
       throw new Error(detail);
@@ -50,17 +54,18 @@
       startupWatchdog = setTimeout(() => {
         if (session !== starting || !firstFrame || disposed) return;
         if (session.visibilityState !== "visible") { watchStartup(starting); return; }
-        diagnose(entries[mode].label + " did not receive a renderable headset frame. Check tracking and retry.");
+        diagnose(entries[entryKey].label + " did not receive a renderable headset frame. Check tracking and retry.");
         void end();
       }, 8000);
     }
-    function message(text, targetMode = mode) {
-      const status = entries[targetMode]?.status;
-      if (status) { status.textContent = text || ""; status.hidden = !text; }
+    function message(text, targetKey = entryKey) {
+      const status = entries[targetKey]?.status;
+      const content = [targetKey === entryKey ? trackingStatus : "", text].filter(Boolean).join(" ");
+      if (status) { status.textContent = content; status.hidden = !content; }
     }
     function sync() {
-      for (const [entryMode, entry] of Object.entries(entries)) {
-        const active = Boolean(session && mode === entryMode);
+      for (const [key, entry] of Object.entries(entries)) {
+        const active = Boolean(session && entryKey === key);
         entry.button.textContent = (active ? "Exit " : "Enter ") + entry.label;
         entry.button.setAttribute("aria-pressed", String(active));
         // Only one XR session may be running or starting at a time.
@@ -76,31 +81,38 @@
         sync();
         return;
       }
-      await Promise.all(Object.entries(entries).map(async ([entryMode, entry]) => {
+      await Promise.all(["immersive-vr", "immersive-ar"].map(async sessionMode => {
+        const matching = Object.entries(entries).filter(([, entry]) => entry.mode === sessionMode);
         try {
-          entry.supported = await navigator.xr.isSessionSupported(entryMode);
-          if (!disposed) message(entry.supported ? "" : "No immersive " + entry.label +
-            " support is available. Standard Orbit still works here.", entryMode);
+          const supported = await navigator.xr.isSessionSupported(sessionMode);
+          for (const [key, entry] of matching) {
+            entry.supported = supported;
+            if (!disposed && key !== entryKey) message(supported ? "" : "No immersive " + entry.label +
+              " support is available. Standard Orbit still works here.", key);
+          }
         } catch (error) {
-          entry.supported = false;
-          if (!disposed) message(entry.label + " availability could not be checked. Open this page directly in your headset browser.", entryMode);
+          for (const [key, entry] of matching) {
+            entry.supported = false;
+            if (!disposed && key !== entryKey) message(entry.label + " availability could not be checked. Open this page directly in your headset browser.", key);
+          }
         }
       }));
       if (!disposed) sync();
     }
     function cleanup(endedSession) {
       if (session !== endedSession) return;
-      const button = entries[mode].button;
+      const button = entries[entryKey].button;
       clearWatchdog(); mutePressed.clear();
       if (frameRequest !== null) session.cancelAnimationFrame(frameRequest);
       frameRequest = null;
-      if (space) space.removeEventListener("reset", recenter);
+      if (resetSpace) resetSpace.removeEventListener("reset", recenter);
       session.removeEventListener("end", onEnd);
       session.removeEventListener("select", select);
       session.removeEventListener("squeeze", squeeze);
       session.removeEventListener("visibilitychange", onVisibility);
       session = layer = space = null;
-      mode = null;
+      resetSpace = null; originCorrections.length = 0;
+      mode = entryKey = null; trackingStatus = "";
       anchor = null; ready = false; previous = null; arOffset.fill(0);
       const gl = options.getGL();
       if (gl && !gl.isContextLost()) {
@@ -109,7 +121,7 @@
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.depthFunc(gl.LESS);
       }
-      document.documentElement.classList.remove("xr-active", "vr-active", "ar-active");
+      document.documentElement.classList.remove("xr-active", "vr-active", "ar-active", "ar-free-active");
       options.onEnd();
       sync();
       if (!disposed) button.focus({ preventScroll: true });
@@ -123,7 +135,31 @@
     function squeeze() {
       if (ready && session.visibilityState === "visible") options.onSqueeze();
     }
-    function recenter() { anchor = null; distance = 1.8; previous = null; arOffset.fill(0); }
+    function recenter(event) {
+      if (!session || !ready || disposed) return;
+      previous = null;
+      if (!entries[entryKey]?.unbounded) {
+        anchor = null; distance = 1.8; arOffset.fill(0);
+        return;
+      }
+      try {
+        if (!event.transform?.inverse) throw new Error("The tracking-origin shift is unknown");
+        // WebXR specifies the NEW origin in the OLD coordinate system.
+        // Its inverse cancels that shift, preserving the entire scene frame,
+        // including sculpture orientation, controller movement and spatial audio.
+        // Listen on the original, un-offset space: its reset transform has an
+        // unambiguous native-origin frame. New corrections must precede older
+        // ones; rotations and translations do not commute.
+        originCorrections.unshift(event.transform.inverse);
+        let replacement = resetSpace;
+        for (const correction of originCorrections) replacement = replacement.getOffsetReferenceSpace(correction);
+        space = replacement;
+      } catch (error) {
+        ready = false;
+        diagnose("AR tracking changed without a usable origin transform. Returning to the browser; clear your space and re-enter to place the sculpture again.", error);
+        void end();
+      }
+    }
     function onVisibility() {
       previous = null; mutePressed.clear();
       options.onVisibility?.(session.visibilityState === "visible");
@@ -131,33 +167,37 @@
     async function end() {
       const ending = session;
       if (!ending) return;
-      const endingMode = mode;
+      const endingKey = entryKey;
       try {
         await ending.end();
         cleanup(ending);
       } catch (error) {
-        if (session === ending) message(entries[endingMode].label +
-          " could not close. Use your headset's system menu to exit XR.", endingMode);
+        if (session === ending) message(entries[endingKey].label +
+          " could not close. Use your headset's system menu to exit XR.", endingKey);
       }
     }
-    async function toggle(requestedMode) {
+    async function toggle(requestedKey) {
       if (pending || disposed) return;
       if (session) {
-        if (mode !== requestedMode) return;
+        if (entryKey !== requestedKey) return;
         pending = true; sync();
         await end();
         pending = false; sync();
+        if (!session && !disposed) entries[requestedKey].button.focus({ preventScroll: true });
         return;
       }
-      if (!entries[requestedMode].supported || !options.available()) return;
-      pending = true; mode = requestedMode; sync(); message("");
+      const entry = entries[requestedKey], requestedMode = entry.mode;
+      if (!entry.supported || !options.available()) return;
+      pending = true; mode = requestedMode; entryKey = requestedKey; trackingStatus = ""; sync(); message("");
       let starting = null;
       try {
         // Audio resume is initiated by this click, but never awaited before XR.
         options.onRequest?.();
         // requestSession must run directly from the user's click, before any
         // awaits that could consume transient user activation.
-        starting = await navigator.xr.requestSession(requestedMode, { optionalFeatures: ["local-floor"] });
+        starting = await navigator.xr.requestSession(requestedMode, {
+          optionalFeatures: entry.unbounded ? ["unbounded", "local-floor"] : ["local-floor"]
+        });
         if (disposed) { await starting.end(); return; }
         session = starting;
         session.addEventListener("end", onEnd);
@@ -183,31 +223,46 @@
         });
         session.updateRenderState({ baseLayer: layer, depthNear: 0.05, depthFar: 30 });
         checkGL("XR layer setup");
-        try { space = await starting.requestReferenceSpace("local-floor"); }
-        catch (error) {
+        let spaceType = null;
+        for (const type of entry.unbounded ? ["unbounded", "local-floor", "local"] : ["local-floor", "local"]) {
           if (session !== starting || disposed) return;
-          space = await starting.requestReferenceSpace("local");
+          try {
+            const selected = await starting.requestReferenceSpace(type);
+            if (session !== starting || disposed) return;
+            space = selected; spaceType = type; break;
+          } catch (error) {
+            if (type === "local") throw error;
+          }
         }
         if (session !== starting || disposed) return;
-        space.addEventListener("reset", recenter);
+        if (entry.unbounded) {
+          trackingStatus = (spaceType === "unbounded" ? "Unbounded tracking selected." :
+            "Unbounded tracking unavailable; using " + spaceType + " tracking.") +
+            " This does not disable the headset safety boundary. Keep passthrough enabled and clear your walking space.";
+          message("");
+        }
+        resetSpace = space;
+        resetSpace.addEventListener("reset", recenter);
         session.addEventListener("select", select);
         session.addEventListener("squeeze", squeeze);
         anchor = null; distance = 1.8; previous = null; ready = true; arOffset.fill(0);
         firstFrame = true; startupWarning = null; recoveryFrames = 0;
         mutePressed.clear(); watchStartup(starting);
         document.documentElement.classList.add("xr-active", requestedMode === "immersive-ar" ? "ar-active" : "vr-active");
+        if (entry.unbounded) document.documentElement.classList.add("ar-free-active");
         frameRequest = session.requestAnimationFrame(onFrame);
       } catch (error) {
         const detail = String(error.message || error).slice(0, 160);
         console.warn("Orbit XR session setup failed:", requestedMode, error);
         if (starting && session === starting) await end();
-        if (!session) mode = null;
-        if (!disposed) message(entries[requestedMode].label +
+        if (!session) { mode = entryKey = null; trackingStatus = ""; }
+        if (!disposed) message(entry.label +
           " could not start. Allow headset access, close other XR sessions and check this mode is supported. (" +
-          detail + ")", requestedMode);
+          detail + ")", requestedKey);
       } finally {
         pending = false;
         sync();
+        if (!session && !disposed) entry.button.focus({ preventScroll: true });
       }
     }
     function onFrame(timestamp, frame) {
@@ -305,7 +360,7 @@
           clearWatchdog();
           if (startupWarning) {
             recoveryFrames = 2;
-            message(entries[mode].label + " first-frame checks passed; startup warning: " + startupWarning);
+            message(entries[entryKey].label + " first-frame checks passed; startup warning: " + startupWarning);
           }
         } else if (recoveryFrames > 0) {
           // Confirm recovery without polling getError throughout every session.
@@ -314,7 +369,7 @@
         }
       } catch (error) {
         ready = false;
-        diagnose(entries[mode].label + " rendering stopped. Returning to the browser.", error);
+        diagnose(entries[entryKey].label + " rendering stopped. Returning to the browser.", error);
         void end();
       }
     }

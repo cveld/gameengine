@@ -63,7 +63,7 @@ async function withPage(options, run) {
     });
     // Capability messages can add rows and a scrollbar after the first paint.
     // Compare images only after that asynchronous layout has settled.
-    await page.waitForFunction(() => ["vr", "ar"].every(mode =>
+    await page.waitForFunction(() => ["vr", "ar", "ar-free"].every(mode =>
       !document.getElementById("enter-" + mode).disabled ||
       document.getElementById(mode + "-status").textContent.length > 0));
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -375,7 +375,7 @@ test("embedded mobile viewer auto-sizes without nested scrolling after rotation"
       });
       assert.equal(dimensions.outerOverflow, false);
       assert.equal(dimensions.innerOverflow, false);
-      // Sound/Pulse add content rows on phones; retain a bounded natural height.
+        // Sound/Pulse and XR entrances add rows on phones; keep a bounded natural height.
       assert.ok(dimensions.frameHeight >= 400 && dimensions.frameHeight < 1200, JSON.stringify(dimensions));
       const footer = page.frameLocator("iframe.orbit-frame").getByRole("link", { name: "MIT license" });
       await footer.scrollIntoViewIfNeeded();
