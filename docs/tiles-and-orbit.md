@@ -1,6 +1,6 @@
 # Tiles and Orbit integration
 
-Updated on November 8, 2026. The original inspection was followed by a
+Updated on November 9, 2026. The original inspection was followed by a
 user-requested WebGL browser adaptation.
 
 ## Home-page tile structure
@@ -424,6 +424,53 @@ framebuffer transparency, not the headset's passthrough compositor.
 The AR movement modifier uses the group's `webxr-gamepads-module` mapping:
 primary trigger `buttons[0]`, thumbstick `axes[2]` / `axes[3]`.
 
+#### Quest boundary and walking around the room
+
+On November 8, 2026 the user asked about disabling the Quest boundary in AR
+to walk around the whole room. Orbit does not clamp physical headset movement:
+the +/-3 meter limits above apply only to controller-driven sculpture placement.
+Do not remove those object limits as a supposed fix for the headset's boundary.
+The current WebXR app does not control the Quest system's Boundary/Guardian.
+
+Prefer a room-scale boundary covering the actual clear floor area rather than
+a stationary play circle. Do not include furniture, stairs or other hazards
+just to enlarge the boundary.
+
+ArborXR's first-party device-management guide, "How to disable the Boundary on
+Meta Quest Devices" (updated June 23, 2026), documents a developer-mode path:
+Settings > System > Developer > Custom Settings > Physical Space Features off.
+That option is a system-level development override, not an Orbit AR-only toggle.
+Availability depends on the device/software configuration; the guide excludes
+Horizon Managed Services Shared Mode. Do not promise that disabling physical
+space features preserves passthrough and tracking on the user's Quest 2.
+On November 9, 2026 the user confirmed that turning this setting off also
+removed passthrough on their Quest 2. This override is therefore not a working
+solution for their walk-around AR goal. Re-enable Physical Space Features;
+retain a room-scale boundary over the actual clear floor area. The agent
+has not independently tested the headset.
+
+Reference:
+
+```text
+https://help.arborxr.com/en/articles/8638529-how-to-disable-the-boundary-on-meta-quest-devices
+```
+
+On November 9, 2026 a standards review identified an experimental browser path:
+request the optional `unbounded` feature and try an `unbounded` reference space,
+falling back to the current local-floor/local path if unavailable. WebXR defines
+this space for free movement over larger distances; it does not specify a
+Guardian-disable switch. Quest 2 support and the browser's boundary behavior
+while retaining passthrough have not been confirmed. No application change was
+made. A future experiment must report the actual selected space and preserve
+placement across reference-origin changes; do not label a fallback boundary-free.
+
+Specification references:
+
+```text
+https://www.w3.org/TR/webxr/
+https://immersive-web.github.io/webxr/spatial-tracking-explainer.html
+```
+
 AR movement validation on November 8, 2026:
 
 - All 24 XR browser checks and 27 normal browser regressions passed with the
@@ -560,6 +607,28 @@ CLI's `--include` option to run them without unrelated legacy tests.
 - The pre-existing `app/package-lock.json` content was preserved unchanged.
 
 ## Repository and validation notes
+
+### Branch inventory snapshot, November 9, 2026
+
+After fetching, `git ls-remote --heads origin` reports only `main` on GitHub.
+Local branches are `main` and `feature/flappy-muis-highscores`. The retained
+`origin/feature/flappy-muis-highscores` ref is stale, not a live remote branch.
+No refs or branches were deleted during this inspection.
+
+The Flappy Muis high-score feature was merged in PR #5 on October 4, 2026
+(merge commit `55870d9`; feature tip `471b6f8` is an ancestor of main).
+The local feature branch additionally contains old Orbit commit `42184ba`.
+Main already contains its Orbit implementation as `e14d39a`: `git range-diff`
+shows only the updated documentation note about the main/co-op build, and
+the original Orbit component, asset and test files match. No feature merge
+is needed based on this snapshot. Refresh refs and inspect local changes
+before any future cleanup; do not infer remote existence from stale refs.
+
+Later on November 9, 2026, the user explicitly requested cleanup. After
+rechecking the tip and confirming that no worktree used the branch, the local
+`feature/flappy-muis-highscores` branch and its stale remote-tracking ref were
+removed. Only `main` remains locally and on GitHub. No remote branch deletion
+was needed, no source files changed, and pending documentation edits were kept.
 
 `app/package.json` specifies Angular 12.2 and Node `16.x`. Build and test scripts
 are `npm run build` and `npm test`, run from `app`.
