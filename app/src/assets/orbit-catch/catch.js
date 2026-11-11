@@ -3,11 +3,15 @@
 (function () {
   "use strict";
   const Rules = window.OrbitCatchGame;
+  const Body = window.OrbitCatchBody;
+  const Music = window.OrbitCatchMusic;
+  const scoreboard = window.OrbitCatchBoard.createBoard();
   const $ = id => document.getElementById(id);
   const canvas = $("scene");
   const arButton = $("enter-ar");
   const vrButton = $("enter-vr");
   const flatButton = $("play-flat");
+  const musicButton = $("music");
   const statusEl = $("xr-status");
   const scoreEl = $("score");
   const comboEl = $("combo");
@@ -20,6 +24,7 @@
     star: [1.00, 0.82, 0.23],
     miss: [1.00, 0.35, 0.35],
     hand: [0.55, 0.95, 0.90],
+    arm: [0.30, 0.42, 0.72],
     grid: [0.25, 0.32, 0.55]
   };
 
@@ -103,6 +108,29 @@
     return new Float32Array(out);
   }
 
+  // Open cylinder of radius 1 from y = 0 to y = 1; joints are drawn as spheres.
+  function cylinderMesh(segments = 12) {
+    const out = [];
+    for (let j = 0; j < segments; j++) {
+      const a = 2 * Math.PI * j / segments, b = 2 * Math.PI * (j + 1) / segments;
+      const p = [[Math.cos(a), 0, Math.sin(a)], [Math.cos(b), 0, Math.sin(b)]];
+      for (const [v, y] of [[p[0], 0], [p[0], 1], [p[1], 1], [p[0], 0], [p[1], 1], [p[1], 0]]) out.push(v[0], y, v[2], v[0], 0, v[2]);
+    }
+    return new Float32Array(out);
+  }
+  // Model matrix for a cylinder of radius r from point a to point b.
+  function segment(out, a, b, r) {
+    const y = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const yn = normalize(y);
+    const x = normalize(cross(yn, Math.abs(yn[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]));
+    const z = cross(x, yn);
+    out[0] = x[0] * r; out[1] = x[1] * r; out[2] = x[2] * r; out[3] = 0;
+    out[4] = y[0]; out[5] = y[1]; out[6] = y[2]; out[7] = 0;
+    out[8] = z[0] * r; out[9] = z[1] * r; out[10] = z[2] * r; out[11] = 0;
+    out[12] = a[0]; out[13] = a[1]; out[14] = a[2]; out[15] = 1;
+    return out;
+  }
+
   // --- WebGL setup -------------------------------------------------------------
   const contextOptions = { alpha: true, antialias: true, xrCompatible: true };
   const gl = canvas.getContext("webgl2", contextOptions) || canvas.getContext("webgl", contextOptions);
@@ -123,6 +151,9 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
   const HUD_FS = `precision mediump float; uniform sampler2D uTex; varying vec2 vUv; void main() { gl_FragColor = texture2D(uTex, vUv); }`;
 
   let res = null;
+  // Two hands, eight palm triangles each, three vertices of six floats.
+  const PALM_FLOATS = 2 * 8 * 3 * 6;
+  const palmData = new Float32Array(PALM_FLOATS);
   let hudKey = "";
   function program(vs, fs) {
     const p = gl.createProgram();
@@ -156,13 +187,16 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     hudKey = "";
+    const palm = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, palm);
+    gl.bufferData(gl.ARRAY_BUFFER, PALM_FLOATS * 4, gl.DYNAMIC_DRAW);
     res = {
-      lit, hud, quad, texture,
+      lit, hud, quad, texture, palm: { buffer: palm, count: 0 },
       litAttr: { position: gl.getAttribLocation(lit, "aPosition"), normal: gl.getAttribLocation(lit, "aNormal") },
       hudAttr: gl.getAttribLocation(hud, "aPos"),
       litU: loc(lit, ["uProj", "uView", "uModel", "uColor", "uEmissive"]),
       hudU: loc(hud, ["uProj", "uView", "uModel", "uTex"]),
-      meshes: { orb: buffer(sphereMesh()), cube: buffer(cubeMesh()), star: buffer(gemMesh()), joint: buffer(sphereMesh(6, 10)), grid: buffer(gridMesh()) }
+      meshes: { orb: buffer(sphereMesh()), cube: buffer(cubeMesh()), star: buffer(gemMesh()), joint: buffer(sphereMesh(6, 10)), grid: buffer(gridMesh()), bone: buffer(cylinderMesh()) }
     };
   }
   createResources();
@@ -191,7 +225,9 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
   let game = null;
   let floorY = 0;
   let showGrid = true;
-  let joints = [];
+  // Virtual body: spheres for joints, cylinders for bones, triangles for palms.
+  let body = { spheres: [], segments: [], palmFloats: 0 };
+  const IDENTITY = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   let hudPose = null;
 
   function drawScene(proj, view) {
@@ -216,9 +252,18 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
         drawMesh(m[o.kind.id], COLORS[o.kind.id], 1, o.kind.id === "star" ? 0.45 : 0.1);
       }
     }
-    for (const j of joints) {
-      compose(modelMatrix, j.x, j.y, j.z, 0, 0, j.r, j.r, j.r);
-      drawMesh(m.joint, COLORS.hand, 1, 0.25);
+    for (const j of body.spheres) {
+      compose(modelMatrix, j.p[0], j.p[1], j.p[2], 0, 0, j.r, j.r, j.r);
+      drawMesh(m.joint, j.color, 1, 0.25);
+    }
+    for (const bone of body.segments) {
+      segment(modelMatrix, bone.a, bone.b, bone.r);
+      drawMesh(m.bone, bone.color, 1, 0.2);
+    }
+    if (body.palmFloats) {
+      modelMatrix.set(IDENTITY);
+      res.palm.count = body.palmFloats / 6;
+      drawMesh(res.palm, COLORS.hand, 1, 0.35);
     }
 
     // Translucent pass: landing markers and catch/miss bursts.
@@ -263,15 +308,15 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
   }
   function updateHudTexture() {
     const lines = hudLines();
-    const key = lines.join("|");
+    const key = lines.join("|") + (scoreboard.holder !== null ? "|held" : "");
     if (key === hudKey) return;
     hudKey = key;
     const c = hudCtx;
     c.clearRect(0, 0, 512, 256);
     c.fillStyle = "rgba(8, 12, 30, 0.72)";
     c.fillRect(0, 0, 512, 256);
-    c.strokeStyle = "rgba(115, 227, 206, 0.8)";
-    c.lineWidth = 4;
+    c.strokeStyle = scoreboard.holder !== null ? "#ffd23a" : "rgba(115, 227, 206, 0.8)";
+    c.lineWidth = scoreboard.holder !== null ? 10 : 4;
     c.strokeRect(2, 2, 508, 252);
     c.textAlign = "center";
     c.fillStyle = "#e4e9f4";
@@ -313,6 +358,22 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
       if (audio.state === "suspended") audio.resume();
     } catch { audio = null; }
   }
+  let techno = null;
+  let musicEnabled = true;
+  function syncMusic() {
+    const wanted = musicEnabled && Boolean(game) && !document.hidden && (Boolean(xrSession) || flatRunning);
+    if (wanted) {
+      ensureAudio();
+      if (audio && !techno) { try { techno = Music.createTechno(audio); } catch { techno = null; } }
+      if (techno) techno.start();
+    } else if (techno) {
+      techno.stop();
+    }
+    musicButton.textContent = musicEnabled ? "Music on" : "Music off";
+    musicButton.setAttribute("aria-pressed", String(musicEnabled));
+  }
+  musicButton.addEventListener("click", () => { musicEnabled = !musicEnabled; syncMusic(); });
+  document.addEventListener("visibilitychange", () => syncMusic());
   function blip(frequency, duration, type, volume) {
     if (!audio || audio.state !== "running") return;
     const now = audio.currentTime;
@@ -376,6 +437,7 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
       flatLast = 0;
       requestAnimationFrame(flatFrame);
     }
+    syncMusic();
   }
   function resizeFlat() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -415,7 +477,7 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
     floorY = 0;
     showGrid = true;
     hudPose = null;
-    joints = [{ x: flatCatcher.x, y: flatCatcher.y, z: flatCatcher.z, r: flatCatcher.radius }];
+    body = { spheres: [{ p: [flatCatcher.x, flatCatcher.y, flatCatcher.z], r: flatCatcher.radius, color: COLORS.hand }], segments: [], palmFloats: 0 };
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0, 0, 0, 0);
@@ -498,26 +560,37 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
     floorKnown = false;
     hudPose = null;
     game = Rules.createGame({ spawnHeight: 2.2 });
+    scoreboard.reset();
+    musicToggleHeld = false;
     button.disabled = false;
     button.textContent = "Exit";
     button.setAttribute("aria-pressed", "true");
     const hands = session.enabledFeatures ? (session.enabledFeatures.includes("hand-tracking") ? "hands enabled" : "hands not granted; use controllers")
       : "hand support unknown";
     statusEl.textContent = `Playing in ${mode === "immersive-ar" ? "AR" : "VR"} · tracking: ${refSpaceType} · ${hands}.`;
-    refSpace.addEventListener("reset", () => { hudPose = null; });
+    refSpace.addEventListener("reset", () => { scoreboard.reset(); });
+    session.addEventListener("squeezestart", event => {
+      const grip = gripPositions.get(event.inputSource);
+      if (!event.inputSource.hand && grip) scoreboard.grab(event.inputSource, grip);
+    });
+    session.addEventListener("squeezeend", event => scoreboard.release(event.inputSource));
     session.addEventListener("select", () => {
       if (game && game.state === "over" && performance.now() - overAt > 1500) game.restart();
     });
     session.addEventListener("end", onSessionEnd);
     session.requestAnimationFrame(onXRFrame);
+    syncMusic();
   }
   function onSessionEnd() {
     const finished = game;
     xrSession = null;
     xrMode = null;
     refSpace = null;
-    joints = [];
+    body = { spheres: [], segments: [], palmFloats: 0 };
     hudPose = null;
+    scoreboard.reset();
+    gripPositions.clear();
+    syncMusic();
     for (const [button, label] of [[arButton, "Play in AR (free roam)"], [vrButton, "Play in VR"]]) {
       button.textContent = label;
       button.setAttribute("aria-pressed", "false");
@@ -539,26 +612,79 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
   }
 
   const PALM_JOINT = "middle-finger-metacarpal";
-  function collectHands(frame, catchers) {
-    joints = [];
+  const gripPositions = new Map();
+  let musicToggleHeld = false;
+  function addArm(next, headMatrix, wrist, back, handedness) {
+    const side = Body.sideOf(handedness, headMatrix, wrist);
+    const arm = Body.arm(headMatrix, wrist, back, side);
+    if (!arm) return;
+    next.segments.push({ a: arm.shoulder, b: arm.elbow, r: 0.045, color: COLORS.arm });
+    next.segments.push({ a: arm.elbow, b: arm.wrist, r: 0.032, color: COLORS.arm });
+    next.spheres.push({ p: arm.shoulder, r: 0.05, color: COLORS.arm });
+    next.spheres.push({ p: arm.elbow, r: 0.042, color: COLORS.arm });
+  }
+  function addPalm(next, points) {
+    const outline = Body.PALM_OUTLINE.map(name => points.get(name)).filter(Boolean).map(j => j.p);
+    if (outline.length < 3 || next.palmFloats + outline.length * 18 > PALM_FLOATS) return;
+    const c = [0, 1, 2].map(i => outline.reduce((sum, p) => sum + p[i], 0) / outline.length);
+    for (let i = 0; i < outline.length; i++) {
+      const a = outline[i], b = outline[(i + 1) % outline.length];
+      const n = normalize(cross([a[0] - c[0], a[1] - c[1], a[2] - c[2]], [b[0] - c[0], b[1] - c[1], b[2] - c[2]]));
+      for (const v of [c, a, b]) { palmData.set([v[0], v[1], v[2], n[0], n[1], n[2]], next.palmFloats); next.palmFloats += 6; }
+    }
+  }
+  function collectHands(frame, catchers, headMatrix) {
+    const next = { spheres: [], segments: [], palmFloats: 0 };
+    // Right thumbstick click toggles the music without leaving the headset.
+    let musicButtonDown = false;
+    for (const source of xrSession.inputSources) {
+      const buttons = source.gamepad && source.gamepad.buttons;
+      if (!source.hand && source.handedness === "right" && buttons && buttons[3] && buttons[3].pressed) musicButtonDown = true;
+    }
+    if (musicButtonDown && !musicToggleHeld) { musicEnabled = !musicEnabled; syncMusic(); }
+    musicToggleHeld = musicButtonDown;
     for (const source of xrSession.inputSources) {
       if (source.hand && frame.getJointPose) {
+        const points = new Map();
         for (const [name, joint] of source.hand.entries()) {
           const pose = frame.getJointPose(joint, refSpace);
           if (!pose) continue;
           const p = pose.transform.position;
-          const r = Math.max(0.006, pose.radius || 0.008);
           if (![p.x, p.y, p.z].every(Number.isFinite)) continue;
-          joints.push({ x: p.x, y: p.y, z: p.z, r });
+          const r = Math.max(0.006, pose.radius || 0.008);
+          points.set(name, { p: [p.x, p.y, p.z], r });
+          next.spheres.push({ p: [p.x, p.y, p.z], r, color: COLORS.hand });
           catchers.push({ x: p.x, y: p.y, z: p.z, radius: name === PALM_JOINT ? 0.06 : r + 0.015 });
+        }
+        for (const [from, to] of Body.HAND_BONES) {
+          const a = points.get(from), b = points.get(to);
+          if (a && b) next.segments.push({ a: a.p, b: b.p, r: Math.min(a.r, b.r) * 0.85, color: COLORS.hand });
+        }
+        addPalm(next, points);
+        const thumb = points.get("thumb-tip"), index = points.get("index-finger-tip");
+        scoreboard.updatePinch(source, thumb && thumb.p, index && index.p);
+        const wrist = points.get("wrist"), palm = points.get(PALM_JOINT);
+        if (wrist) {
+          const back = palm ? [wrist.p[0] - palm.p[0], wrist.p[1] - palm.p[1], wrist.p[2] - palm.p[2]] : null;
+          addArm(next, headMatrix, wrist.p, back, source.handedness);
         }
       } else if (source.gripSpace) {
         const pose = frame.getPose(source.gripSpace, refSpace);
         if (!pose) continue;
-        const p = pose.transform.position;
-        joints.push({ x: p.x, y: p.y, z: p.z, r: 0.04 });
+        const p = pose.transform.position, g = pose.transform.matrix;
+        next.spheres.push({ p: [p.x, p.y, p.z], r: 0.04, color: COLORS.hand });
         catchers.push({ x: p.x, y: p.y, z: p.z, radius: 0.08 });
+        gripPositions.set(source, [p.x, p.y, p.z]);
+        scoreboard.move(source, [p.x, p.y, p.z]);
+        // The grip's +Z axis points back along the forearm.
+        addArm(next, headMatrix, [p.x, p.y, p.z], [g[8], g[9], g[10]], source.handedness);
       }
+    }
+    body = next;
+    if (body.palmFloats) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, res.palm.buffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, palmData.subarray(0, body.palmFloats));
+      boundMesh = null;
     }
   }
 
@@ -588,20 +714,16 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
     showGrid = !ar;
 
     const catchers = [];
-    collectHands(frame, catchers);
+    collectHands(frame, catchers, m);
     if (session.visibilityState === "visible") {
       handleEvents(game.update(dt, { x: head.x, z: head.z }, catchers));
     }
 
-    // Keep the scoreboard lazily in front of the player, slightly below eye level.
-    const fl = Math.hypot(m[8], m[10]) || 1;
-    const target = { x: head.x - (m[8] / fl) * 1.1, y: head.y - 0.3, z: head.z - (m[10] / fl) * 1.1 };
-    if (!hudPose) hudPose = { ...target, yaw: 0 };
-    const k = 1 - Math.exp(-2.5 * Math.min(0.1, dt));
-    hudPose.x += (target.x - hudPose.x) * k;
-    hudPose.y += (target.y - hudPose.y) * k;
-    hudPose.z += (target.z - hudPose.z) * k;
-    hudPose.yaw = Math.atan2(head.x - hudPose.x, head.z - hudPose.z);
+    // The scoreboard stays where it was put; it only turns to face the player.
+    if (!scoreboard.position) scoreboard.place(m);
+    scoreboard.face([head.x, head.y, head.z]);
+    const b = scoreboard.position;
+    hudPose = { x: b[0], y: b[1], z: b[2], yaw: scoreboard.yaw };
     updateHudTexture();
 
     for (const view of pose.views) {

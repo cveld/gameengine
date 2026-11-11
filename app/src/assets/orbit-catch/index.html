@@ -7,6 +7,9 @@
   <title>Orbit Catch</title>
   <link rel="stylesheet" href="style.css">
   <script src="game.js" defer></script>
+  <script src="body.js" defer></script>
+  <script src="board.js" defer></script>
+  <script src="music.js" defer></script>
   <script src="catch.js" defer></script>
 </head>
 <body>
@@ -17,6 +20,7 @@
         <button id="enter-ar" class="primary" disabled title="Passthrough AR with free-roam tracking. Clear your play space first.">Play in AR (free roam)</button>
         <button id="enter-vr" disabled>Play in VR</button>
         <button id="play-flat">Play in browser</button>
+        <button id="music" aria-pressed="true" title="Synthesized techno. In XR, click the right thumbstick to toggle.">Music on</button>
       </div>
       <p id="xr-status" class="status" role="status">Checking for WebXR support…</p>
     </header>
@@ -35,6 +39,8 @@
         <li><span class="dot orb"></span> Blue orb: 1 point · <span class="dot cube"></span> Green cube: 2 points · <span class="dot star"></span> Gold gem: 5 points.</li>
         <li>Catch objects before they reach the floor. Every three catches in a row raise the multiplier, up to ×4. A miss resets it.</li>
         <li><strong>AR / VR:</strong> catch with your bare hands (enable hand tracking on the headset) or with controllers. Objects fall all around you, so turn and walk to reach them. After a round, pinch or pull the trigger to play again.</li>
+        <li><strong>Scoreboard:</strong> it stays where it was placed. Pinch it with thumb and index finger, or hold a controller's grip button on it, to pick it up and move it.</li>
+        <li><strong>Music:</strong> techno plays during the game. Use the Music button, or click the right thumbstick in XR, to turn it on or off.</li>
         <li><strong>Browser:</strong> move the pointer or use the arrow keys.</li>
         <li>Free roam does not disable the headset's safety boundary. Clear your play space and stay aware of your surroundings.</li>
       </ul>

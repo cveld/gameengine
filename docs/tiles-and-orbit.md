@@ -991,9 +991,33 @@ Orbit Catch is a self-contained asset (no CDN or new dependencies):
   poses are drawn and catch with an 8 cm radius, with haptic pulses. Floor
   height is 0 for `local-floor` (or when the head is above 0.9 m), otherwise
   head height − 1.55 m. VR draws a floor grid; AR keeps passthrough
-  transparent. Landing markers show where objects will fall. A canvas-texture
-  scoreboard lazily follows the head. After a round, `select` (pinch or
-  trigger) restarts. Short synthesized sounds play after the entry gesture.
+  transparent. Landing markers show where objects will fall. After a round,
+  `select` (pinch or trigger) restarts. Short synthesized sounds play after
+  the entry gesture.
+- `body.js` (added November 11, 2026 on request): virtual arms, hands and
+  fingers. All 25 hand joints are spheres, joined by cylinder bones (thumb,
+  four fingers, knuckle line), with a triangle-fan palm uploaded per frame.
+  WebXR does not track elbows or shoulders, so shoulders are estimated from
+  the head pose (yaw only: 0.18 m sideways, 0.24 m down, 0.06 m back) and
+  elbows by two-bone IK (upper arm 0.30 m, forearm 0.27 m), bent towards the
+  palm-to-wrist direction and downwards. Controllers attach the arm to the
+  grip pose (grip +Z as forearm direction). These are plausible estimates,
+  not tracked arms; catching still uses only hand joints/grips.
+- `board.js`: the canvas-texture scoreboard is world-locked. It is placed
+  once, 1.2 m ahead of the initial horizontal gaze and 0.15 m below eye
+  height, and only turns (yaw) to face the player. Pinch on it (thumb/index,
+  25 mm start, 45 mm release) or press a controller's grip (`squeezestart`)
+  within its bounds (+7 cm margin, ±9 cm depth) to pick it up; it keeps the
+  grab offset and stays where it is released. One holder at a time; lost
+  tracking releases. A held board gets a gold border. A reference-space
+  reset or new session places it again.
+- `music.js`: synthesized techno at 128 BPM (Web Audio, no files): four-on-
+  the-floor kick, clap on 2 and 4, closed/open hats, a resonant sawtooth
+  bass on the off-16ths with a slow acid filter sweep over 8 bars, and
+  minor-chord stabs with delay. Bar 0 is a hats-only intro; bars 14-15 of
+  every 16 are a breakdown without kick and bass. It plays while a game
+  runs and the page is visible, and stops when XR ends. The **Music** button
+  toggles it; in XR, clicking the right thumbstick does too.
 - Flat browser mode: pointer or arrow keys move a catcher in a single lane.
 
 As with classic free-roam AR, `unbounded` does not disable the Quest boundary.
@@ -1017,6 +1041,8 @@ node --test app/tests/orbit-xr-diagnostics.test.cjs
 node --test app/tests/build-version.test.cjs
 node --test app/tests/orbit-sound.test.cjs
 node --test app/tests/orbit-catch-game.test.cjs
+node --test app/tests/orbit-catch-body.test.cjs
+node --test app/tests/orbit-catch-board-music.test.cjs
 ```
 
 The optional browser smoke suite uses an existing Playwright installation,
