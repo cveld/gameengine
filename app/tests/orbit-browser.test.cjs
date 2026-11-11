@@ -19,7 +19,7 @@ test("Built website and Orbit show the same stamped commit on mobile", { skip: !
     const full = await page.locator("[data-build-version]").getAttribute("title");
     assert.match(full, /^[a-f0-9]{40}( \(local changes\))?$/);
     assert.ok(await page.locator('script[src^="xr.js"]').getAttribute("src").then(src => src.includes("?v=" + full.slice(0, 40))));
-    await page.goto(origin + "/orbit");
+    await page.goto(origin + "/orbit/classic");
     assert.equal(await page.locator("body > .build-version [data-build-version]").textContent(), label);
     const frame = page.frameLocator("app-orbit iframe");
     await frame.locator("[data-build-version]").waitFor();
@@ -375,7 +375,7 @@ test("embedded mobile viewer auto-sizes without nested scrolling after rotation"
   skip: !process.env.ORBIT_TEST_ROOT
 }, async () => {
   await withPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }, async page => {
-    await page.goto(origin + "/orbit");
+    await page.goto(origin + "/orbit/classic");
     for (const [width, height] of [[320, 568], [390, 844], [844, 390], [390, 844]]) {
       await page.setViewportSize({ width, height });
       const iframe = page.locator("iframe.orbit-frame");
@@ -444,7 +444,7 @@ test("missing WebGL shows an actionable fallback", async () => {
   }
 });
 
-test("home tile opens Orbit and its back link returns home in a built app", {
+test("home tile opens the Orbit chooser, classic Orbit and its back link returns home in a built app", {
   skip: !process.env.ORBIT_TEST_ROOT
 }, async () => {
   await withPage({}, async page => {
@@ -455,7 +455,7 @@ test("home tile opens Orbit and its back link returns home in a built app", {
     await iframe.locator("#shape-name").waitFor();
     await page.getByRole("link", { name: "Back to home" }).click();
     await page.waitForURL(origin + "/");
-    await page.goto(origin + "/orbit");
+    await page.goto(origin + "/orbit/classic");
     await iframe.locator("#shape-name").waitFor();
   });
 });
@@ -511,7 +511,7 @@ test("embedded fullscreen returns to content-sized height on mobile", {
   skip: !process.env.ORBIT_TEST_ROOT
 }, async () => {
   await withPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }, async page => {
-    await page.goto(origin + "/orbit");
+    await page.goto(origin + "/orbit/classic");
     const iframe = page.frameLocator("iframe.orbit-frame");
     await iframe.locator("#fullscreen").click();
     await page.waitForFunction(() => Boolean(document.fullscreenElement));

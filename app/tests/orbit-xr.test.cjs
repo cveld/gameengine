@@ -1154,7 +1154,7 @@ for (const mode of ["vr", "ar"]) {
     skip: !process.env.ORBIT_TEST_ROOT
   }, async () => {
     await withXR({}, async page => {
-      await page.goto(origin + "/orbit");
+      await page.goto(origin + "/orbit/classic");
       const iframe = page.locator("iframe.orbit-frame");
       await iframe.waitFor();
       assert.match(await iframe.getAttribute("allow"), /xr-spatial-tracking/);

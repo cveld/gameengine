@@ -17,7 +17,8 @@ The existing destinations at inspection time were:
 - `/maze`: Dungeon Maze
 - `/maze-rooms`: Dungeon Maze rooms
 - `/flappy-muis`: Flappy Muis
-- `/orbit`: Orbit browser edition (added after the original inspection)
+- `/orbit`: Orbit chooser (added November 11, 2026); classic Orbit moved to
+  `/orbit/classic`, the Orbit Catch game is at `/orbit/catch`
 - `/coop`: Tandem Ruimteschip (preserved when integrating the newer main branch)
 
 Routes are registered in `app/src/app/app-routing.module.ts`. Page components
@@ -884,6 +885,48 @@ the updated static assets copied into its asset directory; no new Angular build
 was needed for this asset-only change. Coverage includes 4× slider close-ups
 for all three sculptures, wheel/pinch limits, immersive pinch and camera reset.
 
+## Orbit chooser and Orbit Catch
+
+Added on November 11, 2026 at the user's request. The home tile still routes to
+`/orbit`, which is now `OrbitChooserComponent` (`app/src/app/orbit-chooser`):
+the user first picks **Classic Orbit** (`/orbit/classic`, the existing
+`OrbitComponent` and `assets/orbit/index.html`, unchanged) or **Orbit Catch**
+(`/orbit/catch`, `app/src/app/orbit-catch`, iframe of
+`assets/orbit-catch/index.html` with `allow="fullscreen; xr-spatial-tracking"`).
+`/orbit/diagnostics` is unchanged. Browser tests that expected the classic
+iframe at `/orbit` now use `/orbit/classic`.
+
+Orbit Catch is a self-contained asset (no CDN or new dependencies):
+
+- `game.js`: pure, Node-tested rules. 90-second round after a 3-second
+  countdown. Orb 1, cube 2, gold gem 5 points; constant fall speeds of
+  0.9/1.15/1.5 m/s. Objects spawn 0.35–1.6 m around the player's *current*
+  horizontal position, 2.2–2.6 m above the floor, every 1.1 s shrinking to
+  0.45 s; at most 12 at once. Every three consecutive catches raise the
+  multiplier (max ×4); a floor hit is a miss and resets it.
+- `catch.js`: WebGL 2/1 renderer (GLSL ES 1.00), immersive session, hands and
+  flat fallback. AR requests optional `unbounded`, `local-floor`,
+  `hand-tracking` and tries `unbounded` → `local-floor` → `local`; VR requests
+  `local-floor`, `hand-tracking`. Opaque AR is rejected. Tracked hand joints
+  are drawn as spheres and act as catchers (joint radius + 15 mm; the
+  middle-finger metacarpal as a 6 cm palm). Without hands, controller grip
+  poses are drawn and catch with an 8 cm radius, with haptic pulses. Floor
+  height is 0 for `local-floor` (or when the head is above 0.9 m), otherwise
+  head height − 1.55 m. VR draws a floor grid; AR keeps passthrough
+  transparent. Landing markers show where objects will fall. A canvas-texture
+  scoreboard lazily follows the head. After a round, `select` (pinch or
+  trigger) restarts. Short synthesized sounds play after the entry gesture.
+- Flat browser mode: pointer or arrow keys move a catcher in a single lane.
+
+As with classic free-roam AR, `unbounded` does not disable the Quest boundary.
+Validation on November 11, 2026: 8 rule tests passed; a headless Chromium smoke
+test passed for flat play and synthetic AR/VR sessions (unbounded → local-floor
+fallback, hand-joint catches, exit) with no page errors; production build
+passed (735 kB initial, existing 500 kB warning budget); a built-app check
+navigated home → chooser → Orbit Catch → back → Classic Orbit. Not yet tested
+on a physical Quest: hand-catch feel, spawn distances, unbounded support and
+floor estimation need on-device checks.
+
 ## Orbit validation commands
 
 Run from the repository root with a recent Node runtime (tested with Node 24):
@@ -895,6 +938,7 @@ node --test app/tests/orbit-xr-hands.test.cjs
 node --test app/tests/orbit-xr-diagnostics.test.cjs
 node --test app/tests/build-version.test.cjs
 node --test app/tests/orbit-sound.test.cjs
+node --test app/tests/orbit-catch-game.test.cjs
 ```
 
 The optional browser smoke suite uses an existing Playwright installation,

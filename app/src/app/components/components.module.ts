@@ -17,6 +17,8 @@ import { FlappyMuisComponent } from "../flappy-muis/flappy-muis.component";
 import { MazeRoomsComponent } from "../maze-rooms/maze-rooms.component";
 import { CoopComponent } from "../coop/coop.component";
 import { OrbitComponent } from "../orbit/orbit.component";
+import { OrbitChooserComponent } from "../orbit-chooser/orbit-chooser.component";
+import { OrbitCatchComponent } from "../orbit-catch/orbit-catch.component";
 
 @NgModule({
   declarations: [
@@ -34,7 +36,9 @@ import { OrbitComponent } from "../orbit/orbit.component";
     FlappyMuisComponent,
     MazeRoomsComponent,
     CoopComponent,
-    OrbitComponent
+    OrbitComponent,
+    OrbitChooserComponent,
+    OrbitCatchComponent
   ],
   imports: [
     AppRoutingModule,
