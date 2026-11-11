@@ -54,6 +54,41 @@ async function start(page, mode = "vr") {
   await page.waitForFunction(value => document.documentElement.classList.contains(value + "-active"), mode);
 }
 
+for (const webgl1Only of [false, true]) {
+  test(`Hand-status HUD renders stereo in WebGL ${webgl1Only ? 1 : 2} and distinguishes rejected poses`, async () => {
+    await withXR({ webgl1Only, enabledFeatures: ["local", "hand-tracking"] }, async page => {
+      await page.locator("#help").click();
+      await page.locator("#xr-hand-hud").check();
+      await page.locator("#shortcuts form button").click();
+      await start(page, "ar");
+      const result = await page.evaluate(() => {
+        const device = mockXR.device;
+        const input = { handedness: "left", hand: new Map([
+          ["thumb-tip", { position: [0.1, 1.6, -1.8], emulated: true }],
+          ["index-finger-tip", { position: [0.18, 1.6, -1.8], emulated: true }],
+          ["middle-finger-tip", { position: [0.1, 1.68, -1.8], emulated: true }]
+        ]) };
+        device.inputSources = [input]; device.step(100);
+        const rejected = JSON.parse(document.getElementById("xr-report").value).attempt.handSample;
+        for (const joint of input.hand.values()) joint.emulated = false;
+        device.step(1100);
+        const tracked = JSON.parse(document.getElementById("xr-report").value).attempt.handSample;
+        return { rejected, tracked, pixels: device.pixels(), status: document.getElementById("hand-tracking-status").textContent };
+      });
+      assert.equal(result.rejected.sources, 1);
+      assert.equal(result.rejected.validHands, 0);
+      assert.equal(result.rejected.emulatedJoints, 3);
+      assert.equal(result.tracked.validHands, 1);
+      assert.equal(result.tracked.nearbyHands, 1);
+      assert.match(result.status, /granted.*Valid hands: 1/);
+      assert.equal(result.pixels.error, 0);
+      assert.ok(result.pixels.counts.every(count => count > 5000));
+      await page.locator("#enter-ar").click();
+      assert.equal(await page.locator("#status").isHidden(), true);
+    });
+  });
+}
+
 test("Minimal AR uses the official sample's local-only request and renders transparent stereo", async () => {
   await withXR({ enabledFeatures: ["local", "viewer"] }, async page => {
     await page.locator("#help").click();

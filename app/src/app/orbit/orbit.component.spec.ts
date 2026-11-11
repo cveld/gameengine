@@ -1,12 +1,21 @@
 import { TestBed } from '@angular/core/testing';
 import { RouterTestingModule } from '@angular/router/testing';
+import { FormsModule } from '@angular/forms';
+import { BehaviorSubject } from 'rxjs';
+import { OrbitTelemetryService } from './orbit-telemetry.service';
 import { OrbitComponent } from './orbit.component';
 
 describe('OrbitComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [RouterTestingModule],
-      declarations: [OrbitComponent]
+      imports: [RouterTestingModule, FormsModule],
+      declarations: [OrbitComponent],
+      providers: [{ provide: OrbitTelemetryService, useValue: {
+        status$: new BehaviorSubject('Not sharing'),
+        connect: jasmine.createSpy('connect').and.returnValue(Promise.resolve(true)),
+        publish: jasmine.createSpy('publish').and.returnValue(Promise.resolve()),
+        disconnect: jasmine.createSpy('disconnect')
+      } }]
     }).compileComponents();
   });
 
@@ -54,5 +63,26 @@ describe('OrbitComponent', () => {
     }));
     component.onFrameMessage(new MessageEvent('message', { ...base, data: null }));
     expect(component.frameHeight).toBe(800);
+  });
+
+  it('does not relay frame diagnostics until sharing is enabled, and filters foreign data', async () => {
+    const fixture = TestBed.createComponent(OrbitComponent);
+    fixture.detectChanges();
+    const frame = fixture.nativeElement.querySelector('iframe') as HTMLIFrameElement;
+    const component = fixture.componentInstance;
+    const relay = TestBed.inject(OrbitTelemetryService);
+    const data = { type: 'orbit:xr-report', report: JSON.stringify({
+      report: 'Orbit XR diagnostics v1', environment: {}, attempt: null, events: []
+    }) };
+    component.onFrameMessage(new MessageEvent('message', { origin: window.location.origin, source: window, data }));
+    component.onFrameMessage(new MessageEvent('message', { origin: 'https://foreign.example', source: frame.contentWindow, data }));
+    expect((component as any).latestReport).toBe('');
+    component.onFrameMessage(new MessageEvent('message', { origin: window.location.origin, source: frame.contentWindow, data }));
+    expect(relay.publish).not.toHaveBeenCalled();
+    component.wirelessKey = '12'.repeat(16);
+    await component.startSharing();
+    expect(relay.publish).toHaveBeenCalledTimes(1);
+    component.stopSharing();
+    expect(relay.disconnect).toHaveBeenCalled();
   });
 });

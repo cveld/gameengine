@@ -9,18 +9,21 @@
     const samples = [];
     for (const input of inputs) {
       if (!input.hand?.get) continue;
+      const rejected = { missing: 0, emulated: 0, invalid: 0, error: 0 };
       const joint = name => {
         try {
           const source = input.hand.get(name);
-          if (!source) return null;
+          if (!source) { rejected.missing++; return null; }
           const pose = frame.getJointPose(source, space);
-          if (!pose || pose.emulatedPosition) return null;
+          if (!pose) { rejected.missing++; return null; }
+          if (pose.emulatedPosition) { rejected.emulated++; return null; }
           const p = pose.transform.position, point = [p.x, p.y, p.z];
-          return finite(point) ? point : null;
-        } catch (_) { return null; }
+          if (!finite(point)) { rejected.invalid++; return null; }
+          return point;
+        } catch (_) { rejected.error++; return null; }
       };
       samples.push({ input, handedness: input.handedness, thumb: joint("thumb-tip"),
-        index: joint("index-finger-tip"), middle: joint("middle-finger-tip") });
+        index: joint("index-finger-tip"), middle: joint("middle-finger-tip"), rejected });
     }
     return samples;
   }
@@ -84,7 +87,24 @@
       }
       return result;
     }
-    return { update, reset, get grabbing() { return Boolean(grab); } };
+    return { update, reset, get grabbing() { return Boolean(grab); },
+      summary(samples, objectPosition) {
+        const valid = samples.filter(sample => finite(sample.thumb) && finite(sample.index));
+        return {
+          sources: samples.length, validHands: valid.length,
+          validShapeHands: valid.filter(sample => sample.handedness === "left" && finite(sample.middle)).length,
+          nearbyHands: valid.filter(sample => finite(objectPosition) &&
+            distance(sample.thumb.map((value, i) => (value + sample.index[i]) / 2), objectPosition) <= 0.95).length,
+          pinchedHands: valid.filter(sample => distance(sample.thumb, sample.index) <= close).length,
+          armedHands: Array.from(states.values()).filter(state => state.armed).length,
+          missingJoints: samples.reduce((total, sample) => total + (sample.rejected?.missing || 0), 0),
+          emulatedJoints: samples.reduce((total, sample) => total + (sample.rejected?.emulated || 0), 0),
+          invalidJoints: samples.reduce((total, sample) => total + (sample.rejected?.invalid || 0), 0),
+          failedJoints: samples.reduce((total, sample) => total + (sample.rejected?.error || 0), 0),
+          grabbing: Boolean(grab)
+        };
+      }
+    };
   }
   const api = { create, read };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

@@ -1,4 +1,4 @@
-/* global OrbitXRMath, OrbitXRHands, OrbitXRDiagnostics, XRWebGLLayer */
+/* global OrbitXRMath, OrbitXRHands, OrbitXRDiagnostics, OrbitXRHUD, XRWebGLLayer */
 (function (root) {
   "use strict";
   function create(options) {
@@ -27,6 +27,9 @@
     const copyReport = document.getElementById("copy-xr-report");
     const copyStatus = document.getElementById("xr-copy-status");
     const environmentSupport = { "immersive-vr": null, "immersive-ar": null };
+    const handStatus = document.getElementById("hand-tracking-status");
+    const hudToggle = document.getElementById("xr-hand-hud");
+    let hud = null, lastHandReport = -Infinity, handLines = ["Hands: no active XR session."];
     const diagnostics = OrbitXRDiagnostics.create({
       buildVersion: document.querySelector("[data-build-version]")?.textContent || "Commit: development",
       userAgent: navigator.userAgent,
@@ -36,7 +39,31 @@
       webGL: typeof WebGL2RenderingContext !== "undefined" && options.getGL() instanceof WebGL2RenderingContext ? "WebGL2" : options.getGL() ? "WebGL1" : null,
       support: environmentSupport
     });
-    function refreshReport() { reportField.value = diagnostics.text(); }
+    function refreshReport() {
+      reportField.value = diagnostics.text();
+      const attempt = JSON.parse(reportField.value).attempt;
+      const granted = !attempt ? "no session" : attempt.enabledFeatures === null ? "grant unknown" :
+        attempt.enabledFeatures.includes("hand-tracking") ? "granted" : "not granted";
+      const sample = attempt?.handSample;
+      handLines = [
+        "Hand tracking: " + granted + " | " + (attempt?.referenceSpace || "space pending") +
+          (attempt?.state === "ended" ? " (ended)" : ""),
+        sample ? "Sources: " + sample.sources + " | Valid hands: " + sample.validHands +
+          " | Near object: " + sample.nearbyHands : "Waiting for valid headset / hand poses",
+        sample && !sample.validHands ? "No valid poses | Missing: " + sample.missingJoints +
+          " Emulated: " + sample.emulatedJoints : sample ? "Open first, then pinch | " + (sample.grabbing ? "Holding object" :
+          sample.armedHands ? "Ready to grab" : "Open hand to arm grab") : "No hand sample received"
+      ];
+      handStatus.textContent = handLines.join(" · ");
+      if (window.parent !== window) window.parent.postMessage({
+        type: "orbit:xr-report", report: reportField.value
+      }, window.location.origin);
+    }
+    function requestReport(event) {
+      if (window.parent !== window && event.source === window.parent && event.origin === window.location.origin &&
+          event.data?.type === "orbit:request-report") refreshReport();
+    }
+    window.addEventListener("message", requestReport);
     function record(event, detail) { diagnostics.record(event, detail); refreshReport(); }
     function inputDiagnostics() {
       if (!session) return;
@@ -161,6 +188,7 @@
       diagnostics.finish(); refreshReport();
       const button = entries[entryKey].button;
       clearWatchdog(); mutePressed.clear(); hands.reset();
+      if (hud) { hud.dispose(); hud = null; }
       if (frameRequest !== null) session.cancelAnimationFrame(frameRequest);
       frameRequest = null;
       if (resetSpace) resetSpace.removeEventListener("reset", recenter);
@@ -225,6 +253,7 @@
       }
     }
     function onVisibility() {
+      diagnostics.update({ handSample: null });
       record("visibility", session.visibilityState);
       previous = null; mutePressed.clear(); hands.reset();
       options.onVisibility?.(session.visibilityState === "visible");
@@ -256,6 +285,7 @@
       if (!entry.supported || !options.available()) return;
       const selectedProfile = OrbitXRDiagnostics.profile(requestedKey, minimalAR.checked, minimalHands.checked);
       diagnostics.begin(requestedMode, selectedProfile); copyStatus.textContent = ""; refreshReport();
+      lastHandReport = -Infinity;
       pending = true; mode = requestedMode; entryKey = requestedKey; trackingStatus = ""; sync(); message("");
       let starting = null;
       try {
@@ -360,6 +390,9 @@
         if (firstFrame) checkGL("XR frame entry", true);
         const pose = frame.getViewerPose(space);
         if (!pose || !pose.views.length) {
+          if (timestamp - lastHandReport >= 1000) {
+            lastHandReport = timestamp; diagnostics.update({ handSample: null }); refreshReport();
+          }
           previous = null; hands.reset(); options.onVisibility?.(false);
           return;
         }
@@ -400,7 +433,13 @@
         if (mode === "immersive-ar") {
           for (let i = 0; i < 3; i++) sculpturePosition[i] += arOffset[i];
         }
-        const gesture = hands.update(OrbitXRHands.read(frame, session.inputSources, space), sculpturePosition, elapsed);
+        const samples = OrbitXRHands.read(frame, session.inputSources, space);
+        const gesture = hands.update(samples, sculpturePosition, elapsed);
+        if (timestamp - lastHandReport >= 1000) {
+          lastHandReport = timestamp;
+          diagnostics.update({ handSample: hands.summary(samples, sculpturePosition) });
+          refreshReport();
+        }
         if (gesture.position) {
           // Relocate the anchor, rather than forcing direct hand placement into
           // the controller's limited adjustment offset. Keep the grab offset.
@@ -444,6 +483,11 @@
           OrbitXRMath.multiply(view.projectionMatrix, view.transform.inverse.matrix, viewProjection);
           const check = firstFrame ? stage => checkGL((view.eye || "eye") + " " + stage) : undefined;
           options.drawView(viewProjection, sculpturePosition, view.transform.position, check);
+          if (hudToggle.checked) {
+            if (!hud) hud = OrbitXRHUD.create(gl);
+            hud.draw(handLines);
+            if (firstFrame) checkGL("hand status overlay");
+          }
           viewsDrawn++;
         }
         if (firstFrame) {
@@ -488,6 +532,7 @@
         listeners.forEach(({ button, listener }) => button.removeEventListener("click", listener));
         copyReport.removeEventListener("click", copyDiagnostics);
         help.removeEventListener("click", refreshReport);
+        window.removeEventListener("message", requestReport);
         minimalAR.removeEventListener("change", sync);
         if (navigator.xr) navigator.xr.removeEventListener("devicechange", discover);
         void end();

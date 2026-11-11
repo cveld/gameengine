@@ -1,0 +1,17 @@
+<main class="diagnostics">
+  <h1>Orbit wireless diagnostics</h1>
+  <p>Use the same pairing key on the Quest Orbit page. Reports contain feature grants and hand-pose counts, not room coordinates. This console is read-only.</p>
+  <label>Pairing key <input id="orbit-pairing-key" [(ngModel)]="key" [readonly]="connected || connecting" maxlength="64" autocomplete="off" spellcheck="false"></label>
+  <div class="actions">
+    <button (click)="generate()" [disabled]="connected || connecting">Generate key</button>
+    <button (click)="copyKey()" [disabled]="!key">Copy key</button>
+    <button (click)="connect()" [disabled]="connected || connecting">Connect</button>
+    <button (click)="disconnect()" [disabled]="!connected && !connecting">Disconnect</button>
+    <a routerLink="/orbit">Back to Orbit</a>
+  </div>
+  <p role="status">{{status}}</p>
+  <p><strong>{{handStatus}}</strong></p>
+  <p *ngIf="age !== null">Last report: {{age}} seconds ago <strong *ngIf="age! > 5">— stale; check the Quest or connection</strong></p>
+  <label>Latest XR report <textarea [value]="report" readonly rows="22" spellcheck="false"></textarea></label>
+  <p>The relay uses the existing game SignalR service. Reports are encrypted with the pairing key before sending. Anyone holding that key can read them; do not share it publicly. No remote controls or stored history.</p>
+</main>

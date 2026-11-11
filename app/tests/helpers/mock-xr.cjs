@@ -244,7 +244,7 @@ module.exports = function installMockXR(config = {}) {
         const physical = identity();
         physical[12] = joint.position[0]; physical[13] = joint.position[1]; physical[14] = joint.position[2];
         const local = multiply(inverse(reference.world()), physical);
-        return { transform: { position: { x: local[12], y: local[13], z: local[14] } } };
+          return { emulatedPosition: Boolean(joint.emulated), transform: { position: { x: local[12], y: local[13], z: local[14] } } };
       }, getViewerPose: reference => {
         if (config.startupErrorAfterPose) injectStartupError();
         if (state.missingPose) return null;

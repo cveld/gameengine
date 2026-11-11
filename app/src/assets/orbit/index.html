@@ -10,6 +10,7 @@
   <script src="xr-math.js" defer></script>
   <script src="xr-hands.js" defer></script>
   <script src="xr-diagnostics.js" defer></script>
+  <script src="xr-hud.js" defer></script>
   <script src="xr.js" defer></script>
   <script src="sound.js" defer></script>
   <script src="orbit.js" defer></script>
@@ -32,6 +33,7 @@
       <p id="ar-status" class="fullscreen-status" role="status" hidden></p>
       <p id="ar-free-status" class="fullscreen-status" role="status" hidden></p>
       <p id="sound-status" class="fullscreen-status" role="status" hidden></p>
+      <p id="hand-tracking-status" class="fullscreen-status" role="status">Hands: no active XR session.</p>
     </header>
     <section class="stage" aria-label="Sculpture viewer">
       <div class="halo" aria-hidden="true"></div>
@@ -94,6 +96,8 @@
       <p id="ar-minimal-hint">Applies to Enter AR only: local tracking, no optional features by default, like the official AR sample. Not a Guardian override. Keep passthrough and physical space features enabled.</p>
       <label class="toggle"><input id="ar-minimal-hands" type="checkbox" aria-describedby="ar-minimal-hands-hint" disabled> Hand tracking in minimal AR</label>
       <p id="ar-minimal-hands-hint">Request hand tracking only, without floor or unbounded tracking. Allow hand access on your headset, then start a new AR session. Compare whether the safety boundary remains absent; hand support is not guaranteed.</p>
+      <label class="toggle"><input id="xr-hand-hud" type="checkbox"> Show hand status in headset</label>
+      <p>Read-only debug overlay: feature grant, valid hand poses and grab readiness. Browser permission UI is not controlled by Orbit. Wireless diagnostics are available on the parent Orbit page.</p>
       <label for="xr-report">Last XR attempt</label>
       <textarea id="xr-report" readonly rows="8" spellcheck="false" aria-describedby="xr-report-hint"></textarea>
       <p id="xr-report-hint">Browser version, actual tracking space, features and startup events. No room or hand positions. Nothing is uploaded; review before sharing.</p>

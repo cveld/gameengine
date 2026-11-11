@@ -663,6 +663,84 @@ parsed successfully. `npm run build` completed with the postbuild stamp:
 1 MB error budget. No dependency or lockfile contents changed. These checks
 do not establish Guardian behavior on the physical Quest.
 
+##### Quest follow-up, November 10, 2026
+
+The user selected both minimal-AR checkboxes and entered AR, but reported
+Guardian active and no hand gestures. This combination has therefore not
+achieved the user's boundary-free, hand-interactive AR goal. The earlier report
+of apparently absent Guardian with the no-feature profile is not a verified fix.
+Do not attribute the new boundary prompt specifically to the hand feature
+without a repeatable comparison and the actual headset report.
+
+Deployment was checked rather than assumed: GitHub run `42715185469` for
+`f92b4000064a939a1f585add20a73609c00bbcf4` completed successfully. Its log
+records both version stamping and deployment completion on November 9 at
+22:51 UTC. Direct HTTPS checks on November 10 returned HTTP 200 and
+`Commit: f92b400` in both the website shell and Orbit HTML. Orbit's XR script
+URL includes that commit, and the live profile module contains
+`minimal-local-hands`. This confirms the server deployment, not the version
+actually loaded in the user's Quest tab.
+
+For both checkboxes, the code requests only optional `hand-tracking` and
+selects `local`; the 5 profile/diagnostic unit tests were re-run successfully.
+Requesting an optional feature does not prove it was granted or that valid
+joint poses are being supplied. The next required evidence is the user's
+**Copy XR report** after the failed attempt: build version, profile, requested
+and enabled features, reference space, input sources and joint-pose API
+availability. `enabledFeatures: null` means unknown, not a denial.
+Existing diagnostics identify hand sources but do not count valid joint poses,
+so even a hand-enabled report would not by itself establish functioning
+gesture recognition. No speculative rendering, permission or safety-boundary
+changes were made during this follow-up.
+
+##### Quest permissions and retrieving the report from a PC
+
+On November 10 the user explained that copying from the headset is difficult
+and that no new hand-permission prompt appears, despite earlier approval in
+free-roam AR. Do not equate the lack of a new dialog with permission denial.
+WebXR permissions consider session mode and features; articulated hand input
+requires the `hand-tracking` feature in each requested session. A previous
+generic XR/spatial-tracking approval is not proof of a hand feature grant.
+Browser consent UI and reuse of previous decisions are not controlled by Orbit.
+Normal AR and free-roam AR here both use `immersive-ar` on the same origin;
+they are different feature profiles, not different websites or XR session modes.
+VR uses `immersive-vr`. The actual granted features still require evidence.
+
+The local PC already has Android Platform Tools. At this check, ADB reported
+an authorized device and `ro.product.model` returned `Quest 2`. No browser
+contents were read, no headset settings were changed, and USB versus wireless
+transport was not inferred from that check.
+
+For interactive remote debugging, enable developer/USB debugging if needed,
+use a data-capable USB connection and approve the headset's USB debugging
+authorization. On PC Chrome open `chrome://inspect/#devices`, enable
+**Discover USB devices**, then **inspect** the relevant Orbit tab when exposed
+by Quest Browser. This is the Android/Chromium remote-debugging route; the
+authorized ADB connection alone does not prove a browser target is listed.
+The user's existing native APK setup may already satisfy these prerequisites.
+
+In the remote DevTools console, this read-only command copies the existing
+report to the PC clipboard, handling either the Angular parent or direct asset:
+
+```javascript
+copy((document.querySelector("app-orbit iframe")?.contentDocument ?? document)
+  .querySelector("#xr-report").value);
+```
+
+Do this after the failed session attempt, preferably after exiting XR. Use
+only the known Orbit page, not unrelated browser tabs. The report remains in
+the page after exit; refreshing first would discard that attempt. Review the
+copied report before sharing. A photo of the relevant report fields is a
+low-setup fallback if remote inspection is unavailable.
+
+Primary documentation retrieved directly over HTTPS:
+
+```text
+https://developer.chrome.com/docs/devtools/remote-debugging/
+https://www.w3.org/TR/webxr/
+https://www.w3.org/TR/webxr-hand-input-1/
+```
+
 #### Experimental free-roam AR entrance
 
 On November 9, 2026, added **Enter free-roam AR** beside the existing VR and AR

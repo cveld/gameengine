@@ -17,6 +17,7 @@ import { FlappyMuisComponent } from "../flappy-muis/flappy-muis.component";
 import { MazeRoomsComponent } from "../maze-rooms/maze-rooms.component";
 import { CoopComponent } from "../coop/coop.component";
 import { OrbitComponent } from "../orbit/orbit.component";
+import { OrbitDiagnosticsComponent } from "../orbit/orbit-diagnostics.component";
 import { OrbitChooserComponent } from "../orbit-chooser/orbit-chooser.component";
 import { OrbitCatchComponent } from "../orbit-catch/orbit-catch.component";
 
@@ -37,6 +38,7 @@ import { OrbitCatchComponent } from "../orbit-catch/orbit-catch.component";
     MazeRoomsComponent,
     CoopComponent,
     OrbitComponent,
+    OrbitDiagnosticsComponent,
     OrbitChooserComponent,
     OrbitCatchComponent
   ],

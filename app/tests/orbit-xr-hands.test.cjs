@@ -2,6 +2,19 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { create, read } = require("../src/assets/orbit/xr-hands.js");
 const object = [0, 1.6, -1.8];
+test("Hand summaries distinguish sources, valid poses and proximity without exporting coordinates", () => {
+  const hands = create(), input = { handedness: "left" };
+  const near = sample(input), far = sample(input, [0, 1.6, -5]);
+  hands.update([near], object, 0);
+  const summary = hands.summary([near, far, { input, rejected: { emulated: 3 } }], object);
+  assert.equal(summary.sources, 3);
+  assert.equal(summary.validHands, 2);
+  assert.equal(summary.nearbyHands, 1);
+  assert.equal(summary.emulatedJoints, 3);
+  assert.equal(summary.armedHands, 1);
+  assert.equal(JSON.stringify(summary).includes('"position"'), false);
+  assert.equal(JSON.stringify(summary).includes('"thumb"'), false);
+});
 function sample(input, center = object, indexGap = 0.08, middleGap = 0.08) {
   const thumb = [center[0] - indexGap / 2, center[1], center[2]];
   return { input, handedness: input.handedness, thumb,
