@@ -308,15 +308,18 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
   }
   function updateHudTexture() {
     const lines = hudLines();
-    const key = lines.join("|") + (scoreboard.holder !== null ? "|held" : "");
+    const held = scoreboard.holder !== null;
+    const hover = scoreboard.hovering();
+    const key = lines.join("|") + (held ? "|held" : hover ? "|hover" : "");
     if (key === hudKey) return;
     hudKey = key;
     const c = hudCtx;
     c.clearRect(0, 0, 512, 256);
     c.fillStyle = "rgba(8, 12, 30, 0.72)";
     c.fillRect(0, 0, 512, 256);
-    c.strokeStyle = scoreboard.holder !== null ? "#ffd23a" : "rgba(115, 227, 206, 0.8)";
-    c.lineWidth = scoreboard.holder !== null ? 10 : 4;
+    // Gold while held, bright white-teal while a hand is within reach.
+    c.strokeStyle = held ? "#ffd23a" : hover ? "#ffffff" : "rgba(115, 227, 206, 0.8)";
+    c.lineWidth = held ? 10 : hover ? 8 : 4;
     c.strokeRect(2, 2, 508, 252);
     c.textAlign = "center";
     c.fillStyle = "#e4e9f4";
@@ -571,7 +574,7 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
     refSpace.addEventListener("reset", () => { scoreboard.reset(); });
     session.addEventListener("squeezestart", event => {
       const grip = gripPositions.get(event.inputSource);
-      if (!event.inputSource.hand && grip) scoreboard.grab(event.inputSource, grip);
+      if (!event.inputSource.hand && grip) scoreboard.grab(event.inputSource, grip, boardTime);
     });
     session.addEventListener("squeezeend", event => scoreboard.release(event.inputSource));
     session.addEventListener("select", () => {
@@ -614,6 +617,7 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
   const PALM_JOINT = "middle-finger-metacarpal";
   const gripPositions = new Map();
   let musicToggleHeld = false;
+  let boardTime = 0; // XR frame time in seconds, for the scoreboard's filtering
   function addArm(next, headMatrix, wrist, back, handedness) {
     const side = Body.sideOf(handedness, headMatrix, wrist);
     const arm = Body.arm(headMatrix, wrist, back, side);
@@ -643,6 +647,7 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
     }
     if (musicButtonDown && !musicToggleHeld) { musicEnabled = !musicEnabled; syncMusic(); }
     musicToggleHeld = musicButtonDown;
+    scoreboard.retain(new Set(xrSession.inputSources));
     for (const source of xrSession.inputSources) {
       if (source.hand && frame.getJointPose) {
         const points = new Map();
@@ -662,7 +667,7 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
         }
         addPalm(next, points);
         const thumb = points.get("thumb-tip"), index = points.get("index-finger-tip");
-        scoreboard.updatePinch(source, thumb && thumb.p, index && index.p);
+        scoreboard.updatePinch(source, thumb && thumb.p, index && index.p, boardTime);
         const wrist = points.get("wrist"), palm = points.get(PALM_JOINT);
         if (wrist) {
           const back = palm ? [wrist.p[0] - palm.p[0], wrist.p[1] - palm.p[1], wrist.p[2] - palm.p[2]] : null;
@@ -675,7 +680,7 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
         next.spheres.push({ p: [p.x, p.y, p.z], r: 0.04, color: COLORS.hand });
         catchers.push({ x: p.x, y: p.y, z: p.z, radius: 0.08 });
         gripPositions.set(source, [p.x, p.y, p.z]);
-        scoreboard.move(source, [p.x, p.y, p.z]);
+        scoreboard.track(source, [p.x, p.y, p.z], boardTime);
         // The grip's +Z axis points back along the forearm.
         addArm(next, headMatrix, [p.x, p.y, p.z], [g[8], g[9], g[10]], source.handedness);
       }
@@ -694,6 +699,7 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
     session.requestAnimationFrame(onXRFrame);
     const dt = xrLast ? (time - xrLast) / 1000 : 0;
     xrLast = time;
+    boardTime = time / 1000;
     const layer = session.renderState.baseLayer;
     gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
     const ar = xrMode === "immersive-ar";
@@ -751,6 +757,9 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
     if (game && !xrSession) { flatRunning = true; flatLast = 0; requestAnimationFrame(flatFrame); }
   });
   window.addEventListener("pagehide", endSessionIfAny);
+
+  // Wide viewports fit the screen without scrolling, so the rules start collapsed.
+  if (window.matchMedia("(min-width: 900px)").matches) document.querySelector(".help")?.removeAttribute("open");
 
   // Show an idle preview until the player starts.
   resizeFlat();

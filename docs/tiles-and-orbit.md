@@ -1006,11 +1006,17 @@ Orbit Catch is a self-contained asset (no CDN or new dependencies):
 - `board.js`: the canvas-texture scoreboard is world-locked. It is placed
   once, 1.2 m ahead of the initial horizontal gaze and 0.15 m below eye
   height, and only turns (yaw) to face the player. Pinch on it (thumb/index,
-  25 mm start, 45 mm release) or press a controller's grip (`squeezestart`)
-  within its bounds (+7 cm margin, ±9 cm depth) to pick it up; it keeps the
-  grab offset and stays where it is released. One holder at a time; lost
-  tracking releases. A held board gets a gold border. A reference-space
-  reset or new session places it again.
+  30 mm start, 55 mm release) or press a controller's grip (`squeezestart`)
+  within its generous grab volume (+15 cm margin, ±20 cm depth; a flat quad
+  is hard to judge in passthrough) to pick it up; it keeps the grab offset
+  and stays where it is released. A pinch that starts away from the board
+  never jumps onto it. While held, the hand point is smoothed with an
+  adaptive filter (time constant 150 ms when nearly still, 20 ms when moving
+  fast), and a tracking dropout of up to 300 ms keeps the grip. Hands and
+  controllers that disconnect are dropped via `retain`, so the board can
+  never stay held. One holder at a time. A free hand within reach turns the
+  border white; a held board gets a gold border. A reference-space reset or
+  new session places it again.
 - `music.js`: synthesized techno at 128 BPM (Web Audio, no files): four-on-
   the-floor kick, clap on 2 and 4, closed/open hats, a resonant sawtooth
   bass on the off-16ths with a slow acid filter sweep over 8 bars, and
