@@ -1,20 +1,5 @@
 .orbit-chooser {
-  padding: 12px 8px;
-}
-
-.orbit-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-
-  a {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding: 8px 12px;
-  }
+  padding-bottom: 8px;
 }
 
 .tile {
@@ -23,11 +8,5 @@
   &:hover {
     transform: translateY(-4px);
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
-  }
-}
-
-@media (min-width: 768px) {
-  .orbit-chooser {
-    padding: 24px 16px;
   }
 }

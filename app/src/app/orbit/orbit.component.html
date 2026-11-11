@@ -1,21 +1,22 @@
-<div class="container-fluid orbit-page">
-  <div class="orbit-heading">
-    <h1 class="mb-0">Orbit</h1>
+<div class="orbit-fit">
+  <div class="orbit-bar">
     <a routerLink="/" class="btn btn-outline-secondary btn-sm">Back to home</a>
+    <details class="wireless-panel">
+      <summary>Wireless XR diagnostics</summary>
+      <div class="wireless-body">
+        <p>Pair once before walking. Then keep this page open on the Quest and read reports on your PC without USB. Reports are encrypted before the existing SignalR relay; anyone with the key can read them. Sharing stops after 15 minutes. No room poses or remote controls.</p>
+        <label>Pairing key <input [(ngModel)]="wirelessKey" [disabled]="sharing || connecting" maxlength="64" autocomplete="off" spellcheck="false" placeholder="Paste a key from the PC console, or leave empty to generate"></label>
+        <div class="wireless-actions">
+          <button (click)="startSharing()" [disabled]="sharing || connecting">Start sharing</button>
+          <button (click)="stopSharing()" [disabled]="!sharing && !connecting">Stop sharing</button>
+          <a routerLink="/orbit/diagnostics" target="_blank">Open PC console</a>
+        </div>
+        <p role="status">{{wirelessStatus}}</p>
+        <label *ngIf="sharing">PC link — keep private <input id="orbit-monitor-url" [value]="monitorLink" readonly aria-label="Private PC diagnostics link"></label>
+        <button *ngIf="sharing" (click)="copyMonitorLink()">Copy PC link</button>
+      </div>
+    </details>
   </div>
-  <details class="wireless-panel">
-    <summary>Wireless XR diagnostics</summary>
-    <p>Pair once before walking. Then keep this page open on the Quest and read reports on your PC without USB. Reports are encrypted before the existing SignalR relay; anyone with the key can read them. Sharing stops after 15 minutes. No room poses or remote controls.</p>
-    <label>Pairing key <input [(ngModel)]="wirelessKey" [disabled]="sharing || connecting" maxlength="64" autocomplete="off" spellcheck="false" placeholder="Paste a key from the PC console, or leave empty to generate"></label>
-    <div class="wireless-actions">
-      <button (click)="startSharing()" [disabled]="sharing || connecting">Start sharing</button>
-      <button (click)="stopSharing()" [disabled]="!sharing && !connecting">Stop sharing</button>
-      <a routerLink="/orbit/diagnostics" target="_blank">Open PC console</a>
-    </div>
-    <p role="status">{{wirelessStatus}}</p>
-    <label *ngIf="sharing">PC link — keep private <input id="orbit-monitor-url" [value]="monitorLink" readonly aria-label="Private PC diagnostics link"></label>
-    <button *ngIf="sharing" (click)="copyMonitorLink()">Copy PC link</button>
-  </details>
   <iframe #orbitFrame [src]="orbitUrl" title="Orbit — interactive 3D sculptures"
-          class="orbit-frame" [style.height.px]="frameHeight" allow="fullscreen; xr-spatial-tracking"></iframe>
+          class="orbit-fit-frame orbit-frame" [style.height.px]="frameHeight" allow="fullscreen; xr-spatial-tracking"></iframe>
 </div>

@@ -111,6 +111,18 @@ dd { margin: 0; color: var(--muted); }
   .touch-hint { display: inline; }
 }
 
+/* Wide viewports (Quest browser, desktop): fit the viewport so the page does not scroll.
+   The embedding page uses the same breakpoint and then ignores orbit:resize. */
+@media (min-width: 900px) {
+  .playground { display: flex; flex-direction: column; max-width: none; height: 100vh; min-height: 420px; }
+  header { padding: 6px 16px; column-gap: 16px; row-gap: 2px; }
+  .fullscreen-status { flex: 0 1 auto; font-size: 11px; }
+  .stage { flex: 1 1 auto; height: auto; min-height: 160px; }
+  .controls { padding: 8px 16px; }
+  .shape-picker { margin-bottom: 8px; }
+  footer { padding: 0 16px 4px; }
+}
+
 :root:fullscreen {
   overflow: hidden;
   background: #0b1020;

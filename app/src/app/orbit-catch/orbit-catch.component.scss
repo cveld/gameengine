@@ -1,27 +1,7 @@
-.orbit-catch-page {
-  padding: 12px 8px;
-}
-
-.orbit-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-
-  a {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding: 8px 12px;
+// Wide viewports are sized by the global .orbit-fit layout.
+@media (max-width: 899.98px) {
+  .orbit-catch-frame {
+    height: 85vh;
+    min-height: 640px;
   }
-}
-
-.orbit-catch-frame {
-  display: block;
-  width: 100%;
-  height: 85vh;
-  min-height: 640px;
-  border: none;
-  border-radius: 12px;
 }

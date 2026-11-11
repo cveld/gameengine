@@ -39,10 +39,21 @@ canvas { display: block; width: 100%; aspect-ratio: 4 / 3; max-height: 70vh; tou
 .banner { position: absolute; left: 0; right: 0; top: 42%; margin: 0; text-align: center; font-size: 28px; font-weight: 650; pointer-events: none; text-shadow: 0 2px 6px #000; }
 .banner:empty { display: none; }
 .help { padding: 4px 16px 16px; color: var(--muted); font-size: 14px; }
-.help h2 { font-size: 16px; color: var(--text); }
+.help summary { font-size: 16px; font-weight: 600; color: var(--text); cursor: pointer; min-height: 44px; display: flex; align-items: center; }
 .help li { margin: 6px 0; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
 .dot.orb { background: #4db3ff; }
 .dot.cube { background: #66f080; border-radius: 2px; }
 .dot.star { background: #ffd23a; }
 @media (min-width: 768px) { canvas { aspect-ratio: 16 / 9; } }
+/* Wide viewports (Quest browser, desktop): fit the viewport so the page does not scroll.
+   The embedding page uses the same breakpoint. The rules open as a floating panel. */
+@media (min-width: 900px) {
+  .catch { display: flex; flex-direction: column; position: relative; max-width: none; height: 100vh; min-height: 420px; }
+  header { padding: 6px 16px; }
+  .stage { flex: 1 1 auto; min-height: 0; margin: 0 8px 8px; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; aspect-ratio: auto; }
+  .help { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 5; padding: 0 16px; border-radius: 12px; background: #0b1020f2; }
+  .help:not([open]) { right: auto; }
+  .help[open] { max-height: 70%; overflow: auto; }
+}

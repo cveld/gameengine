@@ -1,49 +1,65 @@
-.orbit-page {
-  padding: 12px 8px;
+.orbit-frame {
+  border-radius: 12px;
 }
 
-.orbit-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+// The panel floats over the game so opening it never changes the page height.
+.wireless-panel {
+  position: relative;
+  margin-left: auto;
+  font-size: 14px;
 
-  h1 {
-    font-size: 1.5rem;
+  summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 8px;
+    cursor: pointer;
   }
 
+  .wireless-body {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 10;
+    box-sizing: border-box;
+    width: min(560px, calc(100vw - 16px));
+    max-height: calc(100vh - 100px);
+    overflow: auto;
+    padding: 12px;
+    border: 1px solid #aaa;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.2);
+  }
+
+  input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 44px;
+    font-family: monospace;
+  }
+
+  label {
+    display: block;
+    margin: 8px 0;
+  }
+}
+
+.wireless-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+
+  button,
   a {
-    display: inline-flex;
-    align-items: center;
     min-height: 44px;
     padding: 8px 12px;
   }
 }
 
-.orbit-frame {
-  display: block;
-  width: 100%;
-  border: none;
-  border-radius: 12px;
-}
-
-.wireless-panel { margin: 0 0 16px; padding: 12px; border: 1px solid #aaa; border-radius: 8px; }
-.wireless-panel summary { cursor: pointer; min-height: 44px; }
-.wireless-panel input { display: block; width: 100%; box-sizing: border-box; min-height: 44px; font-family: monospace; }
-.wireless-panel label { display: block; margin: 8px 0; }
-.wireless-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.wireless-actions button, .wireless-actions a { min-height: 44px; padding: 8px 12px; }
-
 @media (min-width: 768px) {
-  .orbit-page {
-    padding: 24px 16px;
-  }
-
-  .orbit-heading h1 {
-    font-size: 2rem;
-  }
-
   .orbit-frame {
     border-radius: 16px;
   }

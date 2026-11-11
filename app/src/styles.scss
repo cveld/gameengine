@@ -3,6 +3,50 @@
 @import '~bootstrap/scss/bootstrap';
 @import "~bootstrap-icons/font/bootstrap-icons.css";
 
+:root {
+  // 12px padding twice plus one 18px line; keep in sync with .build-version.
+  --build-version-height: 42px;
+}
+
+// Orbit pages: no title or padding, only a slim bar with the back link.
+.orbit-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 8px;
+
+  a.btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+}
+
+// On wide viewports (Quest browser, desktop) the embedded game fills the
+// viewport above the version footer, so the page does not scroll.
+.orbit-fit-frame {
+  display: block;
+  width: 100%;
+  border: none;
+}
+
+@media (min-width: 900px) {
+  .orbit-fit {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - var(--build-version-height));
+    min-height: 420px;
+  }
+
+  .orbit-fit > .orbit-fit-frame {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto !important;
+  }
+}
+
 .build-version {
   padding: 12px 16px;
   text-align: center;
