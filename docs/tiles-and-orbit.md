@@ -1035,6 +1035,29 @@ navigated home → chooser → Orbit Catch → back → Classic Orbit. Not yet t
 on a physical Quest: hand-catch feel, spawn distances, unbounded support and
 floor estimation need on-device checks.
 
+### Compact layout without scrolling (Quest browser)
+
+Added on November 11, 2026. The three Orbit pages (`/orbit`, `/orbit/classic`,
+`/orbit/catch`) no longer show a title or container padding: only a slim 44 px
+`.orbit-bar` (global in `app/src/styles.scss`) with the back link remains. The
+classic page's wireless diagnostics `<details>` moved into that bar.
+
+At viewport widths of 900 px and up, `.orbit-fit` makes the embedded game fill
+the viewport height minus the shell's version footer (`--build-version-height`,
+42 px), so the page does not scroll. The Angular wrapper then ignores the
+asset's `orbit:resize` height (CSS `height: auto !important` on the iframe). The
+assets use the same `(min-width: 900px)` breakpoint to fit their own viewport:
+`.playground` / `.catch` get `height: 100vh`, a compact header and controls, and
+a flexible stage. Below 900 px the previous behavior is unchanged (content-sized
+classic iframe, 85vh Orbit Catch frame). In fit mode the classic wireless panel
+floats over the left of the game and Orbit Catch's "How to play" is a collapsed
+floating `<details>`. Keep both breakpoints in sync.
+
+Checked in the built app at 1280x640, 1024x600 and 1280x720 with Chromium: no
+page or iframe scrolling, no `h1`, back link at the top. The actual Quest 2
+browser viewport size has not been measured; if it is narrower than 900 CSS
+pixels the old, scrolling layout applies.
+
 ## Orbit validation commands
 
 Run from the repository root with a recent Node runtime (tested with Node 24):

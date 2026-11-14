@@ -11,6 +11,7 @@
 // Orbit pages: no title or padding, only a slim bar with the back link.
 .orbit-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   min-height: 44px;

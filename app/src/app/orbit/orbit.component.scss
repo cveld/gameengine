@@ -2,9 +2,7 @@
   border-radius: 12px;
 }
 
-// The panel floats over the game so opening it never changes the page height.
 .wireless-panel {
-  position: relative;
   margin-left: auto;
   font-size: 14px;
 
@@ -16,20 +14,16 @@
     cursor: pointer;
   }
 
+  &[open] {
+    flex-basis: 100%;
+  }
+
   .wireless-body {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    z-index: 10;
     box-sizing: border-box;
-    width: min(560px, calc(100vw - 16px));
-    max-height: calc(100vh - 100px);
-    overflow: auto;
     padding: 12px;
+    margin-bottom: 8px;
     border: 1px solid #aaa;
     border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.2);
   }
 
   input {
@@ -62,5 +56,31 @@
 @media (min-width: 768px) {
   .orbit-frame {
     border-radius: 16px;
+  }
+}
+
+// On wide viewports the page height is fixed, so the open panel floats over
+// the left of the game instead of pushing it down.
+@media (min-width: 900px) {
+  .wireless-panel {
+    position: relative;
+    margin-left: 0;
+
+    &[open] {
+      flex-basis: auto;
+    }
+
+    .wireless-body {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      z-index: 10;
+      width: 520px;
+      max-height: calc(100vh - 100px);
+      margin-bottom: 0;
+      overflow: auto;
+      background: #fff;
+      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.2);
+    }
   }
 }
