@@ -1,7 +1,4 @@
 <div class="orbit-fit">
-  <div class="orbit-bar">
-    <a routerLink="/orbit" class="btn btn-outline-secondary btn-sm">Back to Orbit</a>
-  </div>
-  <iframe [src]="gameUrl" title="Orbit Catch — catch falling objects in WebXR"
+  <iframe #gameFrame [src]="gameUrl" title="Orbit Catch — catch falling objects in WebXR"
           class="orbit-fit-frame orbit-catch-frame" allow="fullscreen; xr-spatial-tracking"></iframe>
 </div>

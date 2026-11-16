@@ -399,7 +399,7 @@ test("embedded mobile viewer auto-sizes without nested scrolling after rotation"
       assert.ok(dimensions.frameHeight >= 400 && dimensions.frameHeight < 1300, JSON.stringify(dimensions));
       const footer = page.frameLocator("iframe.orbit-frame").getByRole("link", { name: "MIT license" });
       await footer.scrollIntoViewIfNeeded();
-      const back = page.getByRole("link", { name: "Back to home" });
+      const back = page.frameLocator("iframe.orbit-frame").getByRole("link", { name: "Back to home" });
       assert.ok((await back.boundingBox()).height >= 44);
     }
   });
@@ -455,10 +455,28 @@ test("home tile opens the Orbit chooser, classic Orbit and its back link returns
     await page.waitForURL("**/orbit/classic");
     const iframe = page.frameLocator('iframe[title="Orbit — interactive 3D sculptures"]');
     await iframe.locator("#shape-name").waitFor();
-    await page.getByRole("link", { name: "Back to home" }).click();
+    await iframe.getByRole("link", { name: "Back to home" }).click();
     await page.waitForURL(origin + "/");
     await page.goto(origin + "/orbit/classic");
     await iframe.locator("#shape-name").waitFor();
+  });
+});
+
+test("Orbit Catch has a back link inside the game and no page scrolling on a Quest-sized viewport", {
+  skip: !process.env.ORBIT_TEST_ROOT
+}, async () => {
+  await withPage({ viewport: { width: 1280, height: 640 } }, async page => {
+    await page.goto(origin + "/orbit/catch");
+    const iframe = page.frameLocator('iframe[title^="Orbit Catch"]');
+    const back = iframe.getByRole("link", { name: "Back to Orbit" });
+    await back.waitFor();
+    const layout = await page.evaluate(() => {
+      const frame = document.querySelector("iframe");
+      return { scroll: document.documentElement.scrollHeight - innerHeight, inner: frame.contentDocument.documentElement.scrollHeight - frame.clientHeight, headings: document.querySelectorAll("h1").length };
+    });
+    assert.deepEqual(layout, { scroll: 0, inner: 0, headings: 0 });
+    await back.click();
+    await page.waitForURL("**/orbit");
   });
 });
 

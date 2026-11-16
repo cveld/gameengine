@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 import { FormsModule } from '@angular/forms';
 import { BehaviorSubject } from 'rxjs';
@@ -28,10 +29,17 @@ describe('OrbitComponent', () => {
     expect(frame.getAttribute('allow')).toContain('xr-spatial-tracking');
   });
 
-  it('provides a route back to home', () => {
+  it('navigates home only on a back message from its own frame', () => {
     const fixture = TestBed.createComponent(OrbitComponent);
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('a').getAttribute('href')).toBe('/');
+    const frame = fixture.nativeElement.querySelector('iframe') as HTMLIFrameElement;
+    const navigate = spyOn(TestBed.inject(Router), 'navigateByUrl').and.returnValue(Promise.resolve(true));
+    const data = { type: 'orbit:back' };
+    fixture.componentInstance.onFrameMessage(new MessageEvent('message', { origin: window.location.origin, source: window, data }));
+    fixture.componentInstance.onFrameMessage(new MessageEvent('message', { origin: 'https://untrusted.example', source: frame.contentWindow, data }));
+    expect(navigate).not.toHaveBeenCalled();
+    fixture.componentInstance.onFrameMessage(new MessageEvent('message', { origin: window.location.origin, source: frame.contentWindow, data }));
+    expect(navigate).toHaveBeenCalledWith('/');
   });
 
   it('resizes from a valid same-origin message sent by its own frame', () => {

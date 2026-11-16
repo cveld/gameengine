@@ -583,6 +583,16 @@
     window.addEventListener("resize", () => { requestRender(); reportSize(); });
   }
   window.addEventListener("load", reportSize);
+  // Embedded in the Angular shell: show the back link; the parent decides where it goes.
+  const backLink = document.getElementById("back-link");
+  if (backLink && window.parent !== window) {
+    backLink.hidden = false;
+    document.documentElement.classList.add("embedded");
+    backLink.addEventListener("click", event => {
+      event.preventDefault();
+      window.parent.postMessage({ type: "orbit:back" }, window.location.origin);
+    });
+  }
   reportSize();
   function initializeSound() {
     sound = OrbitSound.create({

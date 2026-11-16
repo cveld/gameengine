@@ -1037,10 +1037,15 @@ floor estimation need on-device checks.
 
 ### Compact layout without scrolling (Quest browser)
 
-Added on November 11, 2026. The three Orbit pages (`/orbit`, `/orbit/classic`,
-`/orbit/catch`) no longer show a title or container padding: only a slim 44 px
-`.orbit-bar` (global in `app/src/styles.scss`) with the back link remains. The
-classic page's wireless diagnostics `<details>` moved into that bar.
+Added on November 11, 2026, revised on November 16. The Orbit chooser keeps a
+slim `.orbit-bar` with a back link. `/orbit/classic` and `/orbit/catch` have no
+title, padding or bar: the embedded game fills the page, and the **back link
+lives in the game's own header** (`#back-link` in each asset's `index.html`).
+It is only shown when the asset is embedded (`window.parent !== window`) and
+posts `orbit:back` to the parent, which validates origin and frame and navigates
+to a fixed target (`/` for classic, `/orbit` for Orbit Catch; the asset never
+chooses the route). A standalone asset page shows no back link. The embedding
+document is dark (`.orbit-fit`) so no white strip appears around the game.
 
 At viewport widths of 900 px and up, `.orbit-fit` makes the embedded game fill
 the viewport height minus the shell's version footer (`--build-version-height`,
@@ -1049,14 +1054,18 @@ asset's `orbit:resize` height (CSS `height: auto !important` on the iframe). The
 assets use the same `(min-width: 900px)` breakpoint to fit their own viewport:
 `.playground` / `.catch` get `height: 100vh`, a compact header and controls, and
 a flexible stage. Below 900 px the previous behavior is unchanged (content-sized
-classic iframe, 85vh Orbit Catch frame). In fit mode the classic wireless panel
-floats over the left of the game and Orbit Catch's "How to play" is a collapsed
-floating `<details>`. Keep both breakpoints in sync.
+classic iframe, 85vh Orbit Catch frame). Keep both breakpoints in sync.
+
+The classic wireless diagnostics `<details>` sits below the iframe on narrow
+screens and floats at the bottom left of the game (opening upwards) in fit mode;
+the asset hides its footer tagline there (`html.embedded`) so nothing is
+covered. Orbit Catch's "How to play" is a collapsed floating `<details>` in fit
+mode.
 
 Checked in the built app at 1280x640, 1024x600 and 1280x720 with Chromium: no
-page or iframe scrolling, no `h1`, back link at the top. The actual Quest 2
-browser viewport size has not been measured; if it is narrower than 900 CSS
-pixels the old, scrolling layout applies.
+page or iframe scrolling, no `h1`, back link inside the game header. The actual
+Quest 2 browser viewport size has not been measured; if it is narrower than 900
+CSS pixels the old, scrolling layout applies.
 
 ## Orbit validation commands
 

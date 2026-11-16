@@ -25,15 +25,10 @@
   }
 }
 
-// The embedded games are dark; the bar around them matches instead of showing a white strip.
+// The embedded games are dark; the frame's surroundings match.
 .orbit-fit {
+  position: relative;
   background: #0b1020;
-
-  .orbit-bar a.btn {
-    color: #e4e9f4;
-    border-color: #303b57;
-    background: #1b243a;
-  }
 }
 
 // On wide viewports (Quest browser, desktop) the embedded game fills the

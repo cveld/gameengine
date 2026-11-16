@@ -3,7 +3,6 @@
 }
 
 .wireless-panel {
-  margin-left: auto;
   font-size: 14px;
 
   summary {
@@ -13,10 +12,6 @@
     min-height: 44px;
     padding: 0 8px;
     cursor: pointer;
-  }
-
-  &[open] {
-    flex-basis: 100%;
   }
 
   .wireless-body {
@@ -62,27 +57,30 @@
   }
 }
 
-// On wide viewports the page height is fixed, so the open panel floats over
-// the left of the game instead of pushing it down.
+// On wide viewports the page height is fixed, so the panel floats over the
+// bottom left of the game (opening upwards) instead of adding height.
 @media (min-width: 900px) {
   .wireless-panel {
-    position: relative;
-    margin-left: 0;
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    z-index: 10;
 
-    &[open] {
-      flex-basis: auto;
+    summary {
+      border: 1px solid #3e4d70;
+      border-radius: 8px;
+      background: #141d31e6;
     }
 
     .wireless-body {
       position: absolute;
-      top: 100%;
+      bottom: 100%;
       left: 0;
-      z-index: 10;
       width: 520px;
       max-height: calc(100vh - 100px);
-      margin-bottom: 0;
+      margin-bottom: 8px;
       overflow: auto;
-      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.2);
+      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.4);
     }
   }
 }

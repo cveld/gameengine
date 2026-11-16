@@ -1,5 +1,6 @@
 import { Component, ElementRef, HostListener, OnDestroy, ViewChild } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { newPairingKey, normalizeKey, safeReport } from './orbit-relay-protocol';
 import { OrbitTelemetryService } from './orbit-telemetry.service';
@@ -24,7 +25,7 @@ export class OrbitComponent implements OnDestroy {
 
   @ViewChild('orbitFrame') private orbitFrame?: ElementRef<HTMLIFrameElement>;
 
-  constructor(sanitizer: DomSanitizer, private relay: OrbitTelemetryService) {
+  constructor(sanitizer: DomSanitizer, private relay: OrbitTelemetryService, private router: Router) {
     this.orbitUrl = sanitizer.bypassSecurityTrustResourceUrl('assets/orbit/index.html');
     this.subscription = relay.status$.subscribe(value => this.wirelessStatus = value);
   }
@@ -70,6 +71,10 @@ export class OrbitComponent implements OnDestroy {
     if (event.origin !== window.location.origin ||
         !this.orbitFrame?.nativeElement.contentWindow ||
         event.source !== this.orbitFrame.nativeElement.contentWindow) {
+      return;
+    }
+    if (event.data?.type === 'orbit:back') {
+      void this.router.navigateByUrl('/');
       return;
     }
     if (event.data?.type === 'orbit:xr-report' && typeof event.data.report === 'string') {
