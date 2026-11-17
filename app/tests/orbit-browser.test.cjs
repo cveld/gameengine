@@ -399,7 +399,7 @@ test("embedded mobile viewer auto-sizes without nested scrolling after rotation"
       assert.ok(dimensions.frameHeight >= 400 && dimensions.frameHeight < 1300, JSON.stringify(dimensions));
       const footer = page.frameLocator("iframe.orbit-frame").getByRole("link", { name: "MIT license" });
       await footer.scrollIntoViewIfNeeded();
-      const back = page.frameLocator("iframe.orbit-frame").getByRole("link", { name: "Back to home" });
+      const back = page.frameLocator("iframe.orbit-frame").getByRole("link", { name: "Back to Orbit" });
       assert.ok((await back.boundingBox()).height >= 44);
     }
   });
@@ -455,8 +455,8 @@ test("home tile opens the Orbit chooser, classic Orbit and its back link returns
     await page.waitForURL("**/orbit/classic");
     const iframe = page.frameLocator('iframe[title="Orbit — interactive 3D sculptures"]');
     await iframe.locator("#shape-name").waitFor();
-    await iframe.getByRole("link", { name: "Back to home" }).click();
-    await page.waitForURL(origin + "/");
+    await iframe.getByRole("link", { name: "Back to Orbit" }).click();
+    await page.waitForURL(origin + "/orbit");
     await page.goto(origin + "/orbit/classic");
     await iframe.locator("#shape-name").waitFor();
   });

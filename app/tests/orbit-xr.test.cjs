@@ -1203,8 +1203,8 @@ for (const mode of ["vr", "ar"]) {
       assert.ok(output.counts.every(count => count > 5000));
       await child.locator("#enter-" + mode).click();
       await child.waitForFunction(() => !document.documentElement.classList.contains("xr-active"));
-      await page.frameLocator("iframe.orbit-frame").getByRole("link", { name: "Back to home" }).click();
-      await page.waitForURL(origin + "/");
+      await page.frameLocator("iframe.orbit-frame").getByRole("link", { name: "Back to Orbit" }).click();
+      await page.waitForURL(origin + "/orbit");
     });
   });
 }

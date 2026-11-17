@@ -74,7 +74,7 @@ export class OrbitComponent implements OnDestroy {
       return;
     }
     if (event.data?.type === 'orbit:back') {
-      void this.router.navigateByUrl('/');
+      void this.router.navigateByUrl('/orbit');
       return;
     }
     if (event.data?.type === 'orbit:xr-report' && typeof event.data.report === 'string') {

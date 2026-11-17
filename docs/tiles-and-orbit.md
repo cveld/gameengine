@@ -1041,10 +1041,12 @@ Added on November 11, 2026, revised on November 16. The Orbit chooser keeps a
 slim `.orbit-bar` with a back link. `/orbit/classic` and `/orbit/catch` have no
 title, padding or bar: the embedded game fills the page, and the **back link
 lives in the game's own header** (`#back-link` in each asset's `index.html`).
-It is only shown when the asset is embedded (`window.parent !== window`) and
-posts `orbit:back` to the parent, which validates origin and frame and navigates
-to a fixed target (`/` for classic, `/orbit` for Orbit Catch; the asset never
-chooses the route). A standalone asset page shows no back link. The embedding
+It is visible from the first paint: the link is plain HTML and a small inline
+script right after it (not the deferred game script) marks the page `embedded`
+and wires the click, so nothing waits for the game to load. When embedded, the
+click posts `orbit:back` to the parent, which validates origin and frame and
+navigates to the fixed target `/orbit` (the asset never chooses the route).
+Opened standalone, the link is a normal link to `/orbit`. The embedding
 document is dark (`.orbit-fit`) so no white strip appears around the game.
 
 At viewport widths of 900 px and up, `.orbit-fit` makes the embedded game fill

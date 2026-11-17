@@ -758,16 +758,6 @@ void main() { vUv = vec2(aPos.x + 0.5, 0.5 - aPos.y); gl_Position = uProj * uVie
   });
   window.addEventListener("pagehide", endSessionIfAny);
 
-  // Embedded in the Angular shell: show the back link; the parent decides where it goes.
-  const backLink = document.getElementById("back-link");
-  if (backLink && window.parent !== window) {
-    backLink.hidden = false;
-    backLink.addEventListener("click", event => {
-      event.preventDefault();
-      window.parent.postMessage({ type: "orbit:back" }, window.location.origin);
-    });
-  }
-
   // Wide viewports fit the screen without scrolling, so the rules start collapsed.
   if (window.matchMedia("(min-width: 900px)").matches) document.querySelector(".help")?.removeAttribute("open");
 

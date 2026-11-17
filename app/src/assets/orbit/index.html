@@ -19,7 +19,19 @@
   <main class="playground">
     <header>
       <div class="brand">
-        <a id="back-link" class="back-link" href="/" hidden>Back to home</a>
+        <a id="back-link" class="back-link" href="/orbit">Back to Orbit</a>
+        <script>
+          // Runs while the header is parsed, so the link works and the layout is right before the game scripts load.
+          (function () {
+            var link = document.getElementById("back-link");
+            if (window.parent === window) return;
+            document.documentElement.classList.add("embedded");
+            link.addEventListener("click", function (event) {
+              event.preventDefault();
+              window.parent.postMessage({ type: "orbit:back" }, window.location.origin);
+            });
+          })();
+        </script>
         <div class="wordmark"><span class="orbit-mark" aria-hidden="true">◎</span> orbit <span class="edition">WEBGL</span></div>
       </div>
       <div class="header-actions">

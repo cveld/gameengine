@@ -29,7 +29,7 @@ describe('OrbitComponent', () => {
     expect(frame.getAttribute('allow')).toContain('xr-spatial-tracking');
   });
 
-  it('navigates home only on a back message from its own frame', () => {
+  it('navigates to the chooser only on a back message from its own frame', () => {
     const fixture = TestBed.createComponent(OrbitComponent);
     fixture.detectChanges();
     const frame = fixture.nativeElement.querySelector('iframe') as HTMLIFrameElement;
@@ -39,7 +39,7 @@ describe('OrbitComponent', () => {
     fixture.componentInstance.onFrameMessage(new MessageEvent('message', { origin: 'https://untrusted.example', source: frame.contentWindow, data }));
     expect(navigate).not.toHaveBeenCalled();
     fixture.componentInstance.onFrameMessage(new MessageEvent('message', { origin: window.location.origin, source: frame.contentWindow, data }));
-    expect(navigate).toHaveBeenCalledWith('/');
+    expect(navigate).toHaveBeenCalledWith('/orbit');
   });
 
   it('resizes from a valid same-origin message sent by its own frame', () => {
