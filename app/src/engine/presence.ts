@@ -38,6 +38,12 @@ export class PresenceRoom<R extends PresenceResult> {
     client.on<{ clientId: string }>(`${game}.presence.leave`, m => this.onLeave(m.payload?.clientId));
     client.on(`${game}.presence.query`, () => this.answerQuery());
     client.on<R>(`${game}.result`, m => this.onResult(m.payload));
+    // Messages reach whoever is connected at that moment, so answers to a
+    // "who's here?" sent before our own connection was up are lost. Announce
+    // again (and ask again) whenever the connection (re)connects.
+    client.state.subscribe(() => {
+      if (client.connected && this.joined) this.announce();
+    });
     window.addEventListener("pagehide", () => this.leave());
   }
 
@@ -45,7 +51,11 @@ export class PresenceRoom<R extends PresenceResult> {
     this.name = name;
     this.joinedAt = Date.now();
     this.joined = true;
-    this.send(`${this.game}.presence.join`, { clientId: this.clientId, name, joinedAt: this.joinedAt });
+    this.announce();
+  }
+
+  private announce() {
+    this.send(`${this.game}.presence.join`, { clientId: this.clientId, name: this.name, joinedAt: this.joinedAt });
     // Ask everyone already present to (re-)announce themselves.
     this.send(`${this.game}.presence.query`, undefined);
   }
