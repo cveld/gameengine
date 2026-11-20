@@ -108,6 +108,26 @@
         tone(1046.5, now + 0.55, 0.9, "triangle", 0.1);
         tone(783.99, now + 0.55, 0.9, "triangle", 0.08);
       },
+      // A marble dropping into the lava: a hiss of filtered noise.
+      sizzle() {
+        if (!ctx || !enabled) return;
+        const now = ctx.currentTime;
+        const length = Math.floor(ctx.sampleRate * 0.8);
+        const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = ctx.createBiquadFilter();
+        filter.type = "highpass";
+        filter.frequency.value = 2500;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+        noise.connect(filter).connect(gain).connect(master);
+        noise.start(now);
+        tone(90, now, 0.4, "sine", 0.12);
+      },
       ding() {
         if (!ctx) return;
         tone(1318.5, ctx.currentTime, 0.4, "sine", 0.08);

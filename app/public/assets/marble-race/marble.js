@@ -51,6 +51,7 @@
   const params = new URLSearchParams(window.location.search);
   let seed = parseInt(params.get("track"), 10);
   if (!(seed > 0)) seed = randomSeed();
+  let world = Race.WORLDS[params.get("world")] ? params.get("world") : (Race.WORLDS[storageGet("marble-race:world")] ? storageGet("marble-race:world") : "meadow");
   let pick = Math.max(0, Math.min(Race.MARBLES.length - 1, parseInt(storageGet("marble-race:pick"), 10) || 0));
   let course, race;
   let phase = "lobby";
@@ -62,9 +63,12 @@
   const cam = { eye: [0, 10, -12], target: [0, 0, 0], yaw: 0, pitch: 0, zoom: 1, fov: 0.95, ready: false };
   const isMine = id => (tv ? tvPicks.includes(id) : id === pick);
 
-  function newRace(newSeed) {
+  function newRace(newSeed, newWorld) {
     if (newSeed !== undefined) seed = newSeed;
-    course = Race.buildCourse(seed);
+    if (newWorld && Race.WORLDS[newWorld]) world = newWorld;
+    root.classList.toggle("world-lava", world === "lava");
+    for (const b of document.querySelectorAll("[data-world]")) b.setAttribute("aria-checked", String(b.dataset.world === world));
+    course = Race.buildCourse(seed, { world });
     race = Race.createRace(course, { seed: 1 + Math.floor(Math.random() * 1e9) });
     phase = "lobby";
     timeScale = 1;
@@ -72,12 +76,13 @@
     winnerShownAt = null;
     followId = null;
     cam.ready = false;
-    $("track-name").textContent = `Track ${seed}`;
+    $("track-name").textContent = `Track ${seed} · ${Race.WORLDS[world].label}`;
     $("course-list").textContent = course.sections.slice(1, -1).map(s => s.label).join(" → ");
     if (!tv) {
       try {
         const url = new URL(window.location.href);
         url.searchParams.set("track", String(seed));
+        url.searchParams.set("world", world);
         window.history.replaceState(null, "", url);
       } catch (error) { /* ignore */ }
     }
@@ -372,7 +377,12 @@
           say(`${m.name} takes the lead!`);
           break;
         case "respawn":
-          say(e.reason === "fell" ? `${m.name} flew off the track!` : `${m.name} got stuck and is put back`);
+          if (e.reason === "fell" && world === "lava") {
+            say(`${m.name} fell into the lava! \u{1F525}`);
+            sound.sizzle();
+          } else {
+            say(e.reason === "fell" ? `${m.name} flew off the track!` : `${m.name} got stuck and is put back`);
+          }
           break;
         case "finish":
           if (e.place === 1) {
@@ -570,6 +580,9 @@
       case "start": startRace(); break;
       case "skip": skipToResults(); break;
       case "newTrack": newRace(extra.seed || randomSeed()); break;
+      case "world":
+        if (phase === "lobby" || phase === "results") newRace(undefined, extra.world);
+        break;
       case "again": newRace(); startRace(); break;
       case "camera":
         followId = extra.marble !== undefined ? extra.marble : null;
@@ -578,6 +591,13 @@
         break;
       default: break;
     }
+  }
+  for (const button of document.querySelectorAll("[data-world]")) {
+    button.addEventListener("click", () => {
+      if (tv) return;
+      storageSet("marble-race:world", button.dataset.world);
+      command("world", { world: button.dataset.world });
+    });
   }
   $("start").addEventListener("click", () => command("start"));
   $("skip").addEventListener("click", () => command("skip"));
@@ -679,6 +699,7 @@
       type: "state",
       phase,
       track: seed,
+      world,
       overlay: $("countdown").textContent,
       clock: $("clock").textContent,
       section: $("section").textContent,
@@ -694,7 +715,7 @@
   // Phone side: show the TV's state with the local panels.
   let lastTickerSeq = -1;
   function applyRemoteState(state) {
-    if (state.track !== seed) newRace(state.track);
+    if (state.track !== seed || (state.world && state.world !== world)) newRace(state.track, state.world);
     phase = state.phase;
     $("lobby").hidden = state.phase !== "lobby";
     $("countdown").textContent = state.overlay || "";

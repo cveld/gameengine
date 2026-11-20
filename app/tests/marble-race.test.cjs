@@ -120,3 +120,35 @@ test("a marble that falls off the course is returned to its checkpoint", () => {
   assert.equal(marble.respawns, 1);
   assert.ok(Race.projectProgress(race.course, marble.p, marble.pathIndex).distance < 2);
 });
+
+test("the lava world is steeper and faster, with a boulder field and boulders on the route", () => {
+  const meadow = Race.buildCourse(4);
+  const lava = Race.buildCourse(4, { world: "lava" });
+  assert.equal(meadow.world, "meadow");
+  assert.equal(lava.world, "lava");
+  assert.ok(lava.maxSpeed > meadow.maxSpeed);
+  assert.ok(lava.sections.some(s => s.type === "boulders"));
+  assert.equal(meadow.solids.some(s => s.rock), false);
+  const rocks = lava.solids.filter(s => s.rock);
+  assert.ok(rocks.length >= 10, `only ${rocks.length} boulders`);
+  for (const rock of rocks) for (const value of rock.c) assert.ok(Number.isFinite(value));
+  const drop = c => c.path[0][1] - c.path[c.path.length - 1][1];
+  assert.ok(drop(lava) > drop(meadow) * 1.6, "lava should descend much more steeply");
+  // A marble resting on a boulder is pushed out (zero-length capsule = sphere).
+  const hit = Race.collide(rocks[0], [rocks[0].c[0], rocks[0].c[1] + rocks[0].r + Race.R * 0.5, rocks[0].c[2]], Race.R);
+  assert.ok(hit && hit.n[1] > 0.9 && Number.isFinite(hit.depth));
+});
+
+test("a lava race is decided faster than a meadow race on the same track", () => {
+  const time = world => {
+    const race = Race.createRace(Race.buildCourse(3, { world }), { seed: 21 });
+    settleAndStart(race);
+    runToEnd(race);
+    assert.equal(race.state, "finished");
+    assert.ok(race.finishOrder.length >= 9, `${world}: only ${race.finishOrder.length} finished`);
+    for (const m of race.marbles) for (const value of m.p) assert.ok(Number.isFinite(value));
+    return race.winnerTime;
+  };
+  const meadow = time("meadow"), lava = time("lava");
+  assert.ok(lava < meadow, `lava ${lava} s, meadow ${meadow} s`);
+});

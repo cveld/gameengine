@@ -381,6 +381,28 @@ html.fs .ticker { bottom: max(16px, env(safe-area-inset-bottom)); }
 
 .fallback[hidden], .panel[hidden], .skip[hidden] { display: none; }
 
+/* ---------- Worlds ---------- */
+.worlds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.worlds button {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 10px;
+  background: #fff;
+  text-align: left;
+  font-weight: 600;
+}
+.worlds button small { flex-basis: 100%; font-weight: 400; color: var(--muted); font-size: 12px; }
+.worlds button[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+html.world-lava, html.world-lava body { background: #2a0f08; }
+html.tv .worlds { pointer-events: none; }
+
 /* ---------- Chromecast ---------- */
 .cast-backdrop, .tv-only { display: none; }
 

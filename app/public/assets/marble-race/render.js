@@ -162,6 +162,38 @@
     return { p, n, idx };
   }
 
+  // A lumpy sphere for boulders (deterministic, so every rock shares one mesh).
+  function rockMesh() {
+    const mesh = sphereMesh(16, 11);
+    for (let i = 0; i < mesh.p.length; i += 3) {
+      const x = mesh.p[i], y = mesh.p[i + 1], z = mesh.p[i + 2];
+      const k = 1 + 0.16 * Math.sin(x * 4.1 + y * 2.3) * Math.cos(z * 3.7 - x * 1.9) + 0.08 * Math.sin(y * 7.3 + z * 5.1);
+      const flat = y < -0.35 ? 0.75 : 1; // a flatter base so it sits on the floor
+      mesh.p[i] = x * k; mesh.p[i + 1] = y * k * flat; mesh.p[i + 2] = z * k;
+    }
+    return mesh;
+  }
+
+  // Look of each world.
+  const THEMES = {
+    meadow: {
+      clear: [0.8, 0.86, 0.94], fog: [0.8, 0.86, 0.94], fogRange: [60, 420],
+      light: [0.45, 0.85, 0.3], lightColor: [1.0, 0.96, 0.88],
+      ambSky: [0.62, 0.78, 1.0], ambGround: [0.42, 0.38, 0.32], ambStrength: 0.45,
+      envLow: [0.55, 0.5, 0.45], envHigh: [0.75, 0.88, 1.0],
+      skyLow: [0.86, 0.9, 0.96], skyHigh: [0.32, 0.56, 0.92], sun: 1,
+      pillar: null
+    },
+    lava: {
+      clear: [0.14, 0.05, 0.035], fog: [0.2, 0.07, 0.04], fogRange: [25, 230],
+      light: [-0.35, 0.75, 0.25], lightColor: [0.95, 0.62, 0.42],
+      ambSky: [0.16, 0.12, 0.16], ambGround: [1.0, 0.42, 0.14], ambStrength: 0.62,
+      envLow: [1.0, 0.4, 0.1], envHigh: [0.1, 0.07, 0.09],
+      skyLow: [0.42, 0.11, 0.04], skyHigh: [0.03, 0.02, 0.025], sun: 0,
+      pillar: [0.2, 0.17, 0.16]
+    }
+  };
+
   const VERT = `
 attribute vec3 aPos;
 attribute vec3 aNormal;
@@ -197,7 +229,28 @@ uniform vec3 uCamera;
 uniform vec3 uLight;
 uniform vec3 uFogColor;
 uniform vec2 uFog;
+uniform vec3 uLightColor;
+uniform vec3 uAmbSky;
+uniform vec3 uAmbGround;
+uniform float uAmbStrength;
+uniform vec3 uEnvLow;
+uniform vec3 uEnvHigh;
+uniform float uTime;
 void main() {
+  if (uKind > 5.5 && uKind < 6.5) {
+    // Lava: slowly flowing hot rivers between dark crust, self-lit.
+    vec2 p = vWorld.xz * 0.07;
+    float t = uTime * 0.12;
+    float n = sin(p.x * 3.1 + sin(p.y * 2.3 + t) * 1.8 + t) * sin(p.y * 2.7 + sin(p.x * 1.9 - t) * 1.6 - t * 0.7);
+    n += 0.35 * sin(p.x * 9.0 + p.y * 7.0 + t * 3.0);
+    float crust = smoothstep(-0.25, 0.15, n);
+    vec3 hot = mix(vec3(1.0, 0.72, 0.2), vec3(0.95, 0.28, 0.04), smoothstep(-0.9, -0.3, n));
+    vec3 lava = mix(hot, vec3(0.11, 0.045, 0.035), crust);
+    float dist = length(uCamera - vWorld);
+    float fog = clamp((dist - uFog.x) / (uFog.y - uFog.x), 0.0, 1.0);
+    gl_FragColor = vec4(mix(lava, uFogColor, fog * fog * 0.8), 1.0);
+    return;
+  }
   if (uKind > 3.5 && uKind < 4.5) {
     float d = length(vObjPos.xz);
     gl_FragColor = vec4(0.0, 0.0, 0.0, uAlpha * (1.0 - smoothstep(0.35, 1.0, d)));
@@ -230,19 +283,23 @@ void main() {
     vec2 t = floor(vWorld.xz / 6.0);
     float c = mod(t.x + t.y, 2.0);
     base = mix(uColor, uColor2, c * 0.5);
+  } else if (uKind > 6.5 && uKind < 7.5) {
+    // Rock: mottled stone.
+    vec3 q = vObjPos * 3.0;
+    float m = sin(q.x * 2.1 + sin(q.y * 1.7)) * sin(q.z * 2.3 + sin(q.x * 1.3)) * 0.5 + 0.5;
+    base = uColor * (0.75 + 0.45 * m);
+    gloss = 0.03;
   }
   vec3 l = normalize(uLight);
   float diff = max(dot(n, l), 0.0);
-  vec3 sky = vec3(0.62, 0.78, 1.0);
-  vec3 ground = vec3(0.42, 0.38, 0.32);
-  vec3 ambient = mix(ground, sky, n.y * 0.5 + 0.5) * 0.45;
-  vec3 color = base * (ambient + vec3(1.0, 0.96, 0.88) * diff * 0.75);
+  vec3 ambient = mix(uAmbGround, uAmbSky, n.y * 0.5 + 0.5) * uAmbStrength;
+  vec3 color = base * (ambient + uLightColor * diff * 0.75);
   vec3 h = normalize(l + v);
   color += vec3(1.0) * pow(max(dot(n, h), 0.0), shine) * gloss;
   if (uKind > 2.5 && uKind < 3.5) {
     vec3 r = reflect(-v, n);
     float fres = pow(1.0 - max(dot(n, v), 0.0), 3.0);
-    vec3 env = mix(vec3(0.55, 0.5, 0.45), vec3(0.75, 0.88, 1.0), smoothstep(-0.2, 0.4, r.y));
+    vec3 env = mix(uEnvLow, uEnvHigh, smoothstep(-0.2, 0.4, r.y));
     color = mix(color, env, 0.15 + 0.55 * fres);
   }
   color += base * uEmissive;
@@ -261,14 +318,17 @@ precision mediump float;
 varying vec2 vPos;
 uniform mat4 uInvViewProj;
 uniform vec3 uLight;
+uniform vec3 uSkyLow;
+uniform vec3 uSkyHigh;
+uniform float uSun;
 void main() {
   vec4 a = uInvViewProj * vec4(vPos, -1.0, 1.0);
   vec4 b = uInvViewProj * vec4(vPos, 1.0, 1.0);
   vec3 dir = normalize(b.xyz / b.w - a.xyz / a.w);
   float t = clamp(dir.y * 1.4 + 0.15, 0.0, 1.0);
-  vec3 col = mix(vec3(0.86, 0.9, 0.96), vec3(0.32, 0.56, 0.92), t);
+  vec3 col = mix(uSkyLow, uSkyHigh, t);
   float sun = max(dot(dir, normalize(uLight)), 0.0);
-  col += vec3(1.0, 0.85, 0.6) * (pow(sun, 400.0) * 1.5 + pow(sun, 12.0) * 0.18);
+  col += vec3(1.0, 0.85, 0.6) * (pow(sun, 400.0) * 1.5 + pow(sun, 12.0) * 0.18) * uSun;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -314,7 +374,8 @@ void main() {
         sphere: upload(sphereMesh(28, 18)),
         cylinder: upload(cylinderMesh(20, 1, true)),
         cone: upload(cylinderMesh(14, 0, true)),
-        disc: upload(discMesh(24))
+        disc: upload(discMesh(24)),
+        rock: upload(rockMesh())
       };
       skyBuffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, skyBuffer);
@@ -340,8 +401,6 @@ void main() {
     canvas.addEventListener("webglcontextlost", e => { e.preventDefault(); lost = true; });
     canvas.addEventListener("webglcontextrestored", () => { lost = false; init(); });
 
-    const LIGHT = [0.45, 0.85, 0.3];
-    const FOG = [0.8, 0.86, 0.94];
     let current = null;
     function bindMesh(mesh) {
       if (current === mesh) return;
@@ -379,15 +438,37 @@ void main() {
     function prepareScenery(course) {
       const rnd = root.MarbleRace.createRng(course.seed * 31 + 7);
       const trees = [];
+      const spikes = [];
       const b = course.bounds;
       const pad = 30;
-      for (let i = 0; i < (lowPower ? 40 : 90); i++) {
-        const x = b.min[0] - pad + rnd() * (b.max[0] - b.min[0] + pad * 2);
-        const z = b.min[2] - pad + rnd() * (b.max[2] - b.min[2] + pad * 2);
-        const h = 2.5 + rnd() * 3;
-        trees.push({ x, z, h, shade: 0.75 + rnd() * 0.35 });
+      if (course.world === "lava") {
+        // Stalagmites rising from the lava, kept clear of the track so they never block the view.
+        const clear = (x, z) => course.path.every(p => Math.hypot(p[0] - x, p[2] - z) > 9);
+        for (let i = 0, tries = 0; i < (lowPower ? 35 : 80) && tries < 2000; tries++) {
+          const x = b.min[0] - pad + rnd() * (b.max[0] - b.min[0] + pad * 2);
+          const z = b.min[2] - pad + rnd() * (b.max[2] - b.min[2] + pad * 2);
+          const h = 3 + rnd() * 8;
+          const r = h * (0.18 + rnd() * 0.08);
+          if (!clear(x, z)) continue;
+          spikes.push({ x, z, h, r, up: true, base: course.groundY, shade: 0.7 + rnd() * 0.5 });
+          i++;
+        }
+      } else {
+        for (let i = 0; i < (lowPower ? 40 : 90); i++) {
+          const x = b.min[0] - pad + rnd() * (b.max[0] - b.min[0] + pad * 2);
+          const z = b.min[2] - pad + rnd() * (b.max[2] - b.min[2] + pad * 2);
+          const h = 2.5 + rnd() * 3;
+          trees.push({ x, z, h, shade: 0.75 + rnd() * 0.35 });
+        }
       }
-      scenery = { course, trees };
+      // Each boulder gets its own orientation.
+      const rockTurns = new Map();
+      for (const solid of course.solids) {
+        if (!solid.rock) continue;
+        const a = rnd() * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+        rockTurns.set(solid, [c, 0, -s, 0, 1, 0, s, 0, c]);
+      }
+      scenery = { course, trees, spikes, rockTurns, theme: THEMES[course.world] || THEMES.meadow };
     }
 
     function render(scene) {
@@ -399,7 +480,8 @@ void main() {
       const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
       gl.viewport(0, 0, w, h);
-      gl.clearColor(FOG[0], FOG[1], FOG[2], 1);
+      const theme = scenery.theme;
+      gl.clearColor(theme.clear[0], theme.clear[1], theme.clear[2], 1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
       const proj = perspective(camera.fov || 0.95, w / h, 0.1, 700);
@@ -412,7 +494,10 @@ void main() {
       gl.disable(gl.DEPTH_TEST);
       gl.useProgram(sky.prog);
       gl.uniformMatrix4fv(sky.u.uInvViewProj, false, invert(viewProj));
-      gl.uniform3fv(sky.u.uLight, LIGHT);
+      gl.uniform3fv(sky.u.uLight, theme.light);
+      gl.uniform3fv(sky.u.uSkyLow, theme.skyLow);
+      gl.uniform3fv(sky.u.uSkyHigh, theme.skyHigh);
+      gl.uniform1f(sky.u.uSun, theme.sun);
       gl.bindBuffer(gl.ARRAY_BUFFER, skyBuffer);
       gl.enableVertexAttribArray(0);
       gl.disableVertexAttribArray(1);
@@ -426,14 +511,30 @@ void main() {
       const u = main.u;
       gl.uniformMatrix4fv(u.uViewProj, false, viewProj);
       gl.uniform3fv(u.uCamera, camera.eye);
-      gl.uniform3fv(u.uLight, LIGHT);
-      gl.uniform3fv(u.uFogColor, FOG);
-      gl.uniform2f(u.uFog, 60, 420);
+      gl.uniform3fv(u.uLight, theme.light);
+      gl.uniform3fv(u.uFogColor, theme.fog);
+      gl.uniform2fv(u.uFog, theme.fogRange);
+      gl.uniform3fv(u.uLightColor, theme.lightColor);
+      gl.uniform3fv(u.uAmbSky, theme.ambSky);
+      gl.uniform3fv(u.uAmbGround, theme.ambGround);
+      gl.uniform1f(u.uAmbStrength, theme.ambStrength);
+      gl.uniform3fv(u.uEnvLow, theme.envLow);
+      gl.uniform3fv(u.uEnvHigh, theme.envHigh);
+      gl.uniform1f(u.uTime, performance.now() / 1000);
 
       // Ground, trees and pillars.
       const gy = course.groundY;
       const cx = (course.bounds.min[0] + course.bounds.max[0]) / 2, cz = (course.bounds.min[2] + course.bounds.max[2]) / 2;
-      draw(meshes.cube, IDENTITY3, [600, 0.5, 600], [cx, gy - 0.5, cz], [0.42, 0.66, 0.3], { kind: 5, color2: [0.52, 0.76, 0.36] });
+      if (course.world === "lava") {
+        draw(meshes.cube, IDENTITY3, [600, 0.5, 600], [cx, gy - 0.5, cz], [1, 0.4, 0.1], { kind: 6 });
+        const FLIP = [1, 0, 0, 0, -1, 0, 0, 0, 1];
+        for (const k of scenery.spikes) {
+          const color = [0.2 * k.shade, 0.16 * k.shade, 0.15 * k.shade];
+          draw(meshes.cone, k.up ? IDENTITY3 : FLIP, [k.r, k.h / 2, k.r], [k.x, k.base + (k.up ? k.h / 2 : -k.h / 2), k.z], color);
+        }
+      } else {
+        draw(meshes.cube, IDENTITY3, [600, 0.5, 600], [cx, gy - 0.5, cz], [0.42, 0.66, 0.3], { kind: 5, color2: [0.52, 0.76, 0.36] });
+      }
       for (const t of scenery.trees) {
         draw(meshes.cylinder, IDENTITY3, [0.22, t.h * 0.2, 0.22], [t.x, gy + t.h * 0.2, t.z], [0.45, 0.3, 0.18]);
         draw(meshes.cone, IDENTITY3, [t.h * 0.32, t.h * 0.45, t.h * 0.32], [t.x, gy + t.h * 0.4 + t.h * 0.45, t.z], [0.16 * t.shade, 0.5 * t.shade, 0.24 * t.shade]);
@@ -442,7 +543,7 @@ void main() {
         if (d.type === "pillar") {
           const top = d.c[1] - 0.4;
           const half = (top - gy) / 2;
-          if (half > 0) draw(meshes.cylinder, IDENTITY3, [0.45, half, 0.45], [d.c[0], gy + half, d.c[2]], d.color);
+          if (half > 0) draw(meshes.cylinder, IDENTITY3, [0.45, half, 0.45], [d.c[0], gy + half, d.c[2]], theme.pillar || d.color);
         } else {
           draw(meshes.cube, d.m, d.h, d.c, d.color, { kind: d.kind || 0 });
         }
@@ -451,7 +552,11 @@ void main() {
       // Course solids.
       for (const s of course.solids) {
         if (s.type === "box") {
-          draw(meshes.cube, s.m, s.h, s.c, s.color || [0.8, 0.8, 0.8], { kind: s.kind || 0 });
+          // In the cave the coloured obstacles glow a little, lit by the lava.
+          const glow = course.world === "lava" && !s.floor && s.tag !== "wall" ? 0.22 : 0;
+          draw(meshes.cube, s.m, s.h, s.c, s.color || [0.8, 0.8, 0.8], { kind: s.kind || 0, emissive: glow });
+        } else if (s.rock) {
+          draw(meshes.rock, scenery.rockTurns.get(s) || IDENTITY3, [s.r * 1.05, s.r * 1.05, s.r * 1.05], s.a, s.color, { kind: 7 });
         } else {
           let emissive = 0;
           if (s.tag === "bumper" && s.lastHit !== undefined) emissive = Math.max(0, 0.9 - (time - s.lastHit) * 3);
