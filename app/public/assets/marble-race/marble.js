@@ -289,8 +289,16 @@
       target = [c[0], c[1] + 0.3, c[2]];
       eye = [c[0] + Math.sin(angle) * r, c[1] + 6.5 + cam.pitch * 4, c[2] - Math.cos(angle) * r];
     } else {
-      const m = currentTarget();
-      if (!m) {
+      const cave = course.world === "lava";
+      const m = currentTarget() || (cave ? Race.standings(race).find(x => !x.finished) || Race.standings(race)[0] : null);
+      if (cave && camMode === "overview" && m) {
+        // Inside the cave there is no view from above: a high, wide chase camera instead.
+        const [hx, hz] = headingAt(m);
+        const bx = hx * Math.cos(cam.yaw) - hz * Math.sin(cam.yaw), bz = hx * Math.sin(cam.yaw) + hz * Math.cos(cam.yaw);
+        const dist = 13 * cam.zoom;
+        target = [m.p[0] + hx * 4, m.p[1] - 1, m.p[2] + hz * 4];
+        eye = [m.p[0] - bx * dist, m.p[1] + 6.5 + cam.pitch * 2, m.p[2] - bz * dist];
+      } else if (!m) {
         const b = course.bounds;
         const c = [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2];
         const extent = Math.max(b.max[0] - b.min[0], b.max[2] - b.min[2]);
@@ -307,6 +315,12 @@
         target = [m.p[0] + hx * 1.5, m.p[1] + 0.2, m.p[2] + hz * 1.5];
         eye = [m.p[0] - bx * dist, m.p[1] + height, m.p[2] - bz * dist];
       }
+    }
+    if (course.ceilingHeight) {
+      // Stay inside the cave: below the ceiling and above the lava.
+      const top = course.ceilingHeight(eye[0], eye[2]) - 1;
+      const bottom = course.lavaHeight(eye[0], eye[2]) + 1;
+      eye[1] = Math.max(bottom, Math.min(top, eye[1]));
     }
     if (!cam.ready) {
       cam.eye = eye.slice();
@@ -377,7 +391,7 @@
           say(`${m.name} takes the lead!`);
           break;
         case "respawn":
-          if (e.reason === "fell" && world === "lava") {
+          if (e.reason === "lava" || (e.reason === "fell" && world === "lava")) {
             say(`${m.name} fell into the lava! \u{1F525}`);
             sound.sizzle();
           } else {
@@ -399,6 +413,23 @@
           break;
         case "clack":
           sound.clack(e.speed);
+          break;
+        case "rockfall":
+          sound.rockfall();
+          if (tickerTimer <= 0) say("Rockfall! \u{1FAA8}", 1.6);
+          break;
+        case "rockland":
+          sound.thump(Math.min(8, e.speed));
+          break;
+        case "rockhit":
+          sound.thump(6);
+          say(`${m.name} is hit by a falling rock!`);
+          break;
+        case "rocksink":
+          sound.sizzle();
+          break;
+        case "rockcrumble":
+          sound.crumble();
           break;
         case "hit":
           if (e.tag === "bumper") sound.boing();
@@ -808,7 +839,7 @@
     for (const m of race.marbles) m.highlight = isMine(m.id);
     sound.rumble(target && target.grounded ? Math.hypot(target.v[0], target.v[1], target.v[2]) : 0);
     updateCamera(dt);
-    const scene = { course, marbles: race.marbles, camera: cam, time: race.time };
+    const scene = { course, marbles: race.marbles, rocks: race.rocks, camera: cam, time: race.time };
     renderer.render(scene);
     updateLabels(scene.viewProj);
     drawConfetti(dt);

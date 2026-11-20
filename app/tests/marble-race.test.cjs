@@ -152,3 +152,43 @@ test("a lava race is decided faster than a meadow race on the same track", () =>
   const meadow = time("meadow"), lava = time("lava");
   assert.ok(lava < meadow, `lava ${lava} s, meadow ${meadow} s`);
 });
+
+test("the lava cave: a lava river below the track and a ceiling above it, both following it down", () => {
+  const course = Race.buildCourse(5, { world: "lava" });
+  for (const p of course.path) {
+    const floor = p[1] - Race.R;
+    assert.ok(course.lavaHeight(p[0], p[2]) < floor - 2, "lava must stay well below the track");
+    assert.ok(course.ceilingHeight(p[0], p[2]) > floor + 7.5, "the ceiling must leave room above the track");
+  }
+  // Far from the track the ceiling comes down below the lava: the cave is closed.
+  const b = course.bounds;
+  const x = b.max[0] + 38, z = b.max[2] + 38;
+  assert.ok(course.ceilingHeight(x, z) < course.lavaHeight(x, z));
+  assert.equal(Race.buildCourse(5).lavaHeight, undefined, "meadow has no lava");
+});
+
+test("rocks fall from the ceiling during a lava race, hit marbles and are cleared again", () => {
+  const race = Race.createRace(Race.buildCourse(2, { world: "lava" }), { seed: 4 });
+  settleAndStart(race);
+  const events = runToEnd(race);
+  const count = type => events.filter(e => e.type === type).length;
+  assert.ok(count("rockfall") >= 8, `only ${count("rockfall")} rocks fell`);
+  assert.ok(count("rockland") >= 1 && count("rockhit") >= 1);
+  assert.equal(count("rockfall"), count("rocksink") + count("rockcrumble") + race.rocks.length);
+  assert.equal(race.state, "finished");
+  // No rocks in the meadow.
+  const meadow = Race.createRace(Race.buildCourse(2), { seed: 4 });
+  settleAndStart(meadow);
+  assert.equal(runToEnd(meadow).filter(e => e.type === "rockfall").length, 0);
+});
+
+test("a marble that drops into the lava river is reset at once", () => {
+  const race = Race.createRace(Race.buildCourse(6, { world: "lava" }), { seed: 3 });
+  settleAndStart(race);
+  for (let i = 0; i < 60 * 5; i++) Race.update(race, 1 / 60);
+  const marble = race.marbles.find(m => !m.finished);
+  const [x, , z] = marble.p;
+  marble.p = [x, race.course.lavaHeight(x, z) - 0.05, z];
+  const events = Race.update(race, 1 / 60);
+  assert.ok(events.some(e => e.type === "respawn" && e.marble === marble.id && e.reason === "lava"));
+});

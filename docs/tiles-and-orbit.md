@@ -109,10 +109,26 @@ The asset is self-contained (no CDN, dependencies, network calls or telemetry):
     capsules (spheres), which `collide` handles without dividing by zero.
     The lava extras use their own random stream, so meadow tracks are
     unchanged for the same seed.
-  - Look: dark cave sky, a self-lit flowing lava floor, stalagmites kept 9 m
-    away from the track, basalt pillars, warm light from below, glowing
-    obstacles, rough rock meshes. Marbles that fly off "fall into the lava"
-    (ticker and a sizzle sound) and are reset as before.
+  - Cave (revised the same day on request: "more indoor, lava flowing left and
+    right, bridges, falling rocks"). `race.js` gives a lava course
+    `caveField(x, z)` (track height smoothed over the nearest centre-line
+    segments, distance to the track, downhill direction), `lavaHeight` (2.6 m
+    below the track) and `ceilingHeight` (9 m above it, coming down below the
+    lava 13–30 m away from the track, which closes the cave). The renderer
+    builds two heightfield meshes from them: the lava river, which flows
+    downhill (direction stored in the mesh's normals), and the rock ceiling
+    with stalactites; rock spires rise from the lava. Lanes look like stone
+    bridges (parapet posts, piers down to the lava). The camera stays between
+    lava and ceiling; "Overview" becomes a high chase camera in the cave.
+  - A marble below the lava surface is reset at once (reason `lava`).
+  - Falling rocks: every 1.8–4 s (at most 6 at once) a rock drops from just
+    under the ceiling 7–19 m ahead of a random running marble. Its shadow on
+    the track grows as a warning. Rocks are heavy spheres (about 6x a marble)
+    that bounce, roll down, push marbles (`rockhit` when hit while falling)
+    and disappear in the lava (`rocksink`) or crumble after resting for 2 s or
+    living 14 s (`rockcrumble`). Sounds: rumble, thump, sizzle, crumble.
+  - Simulated lava races: winners after about 27–41 s, usually all marbles
+    finish, around 20 rocks per race.
 - Chromecast (added November 20, 2026 on request). Google Cast with a custom
   Web Receiver; the TV runs the race, phones are remote controls.
   - Receiver: `index.html?tv=1` (class `tv`: no controls, larger type, overscan
