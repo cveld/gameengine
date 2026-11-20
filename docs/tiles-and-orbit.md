@@ -98,6 +98,37 @@ The asset is self-contained (no CDN, dependencies, network calls or telemetry):
   floating "Camera" and "Exit fullscreen" buttons appear (safe-area aware).
   The back link stays in the normal header. Checked with Chromium Pixel 7
   landscape emulation for both paths; not checked on a physical phone.
+- Chromecast (added November 20, 2026 on request). Google Cast with a custom
+  Web Receiver; the TV runs the race, phones are remote controls.
+  - Receiver: `index.html?tv=1` (class `tv`: no controls, larger type, overscan
+    margins, `lowPower` renderer with 1x pixels, no MSAA, fewer trees).
+    `cast-receiver.js` loads the CAF receiver framework from gstatic.com and
+    listens on `urn:x-cast:nl.gameengine.marblerace` (JSON). Phones send
+    `hello`/`pick` (their marble) and `command` (`start`, `again`, `newTrack`,
+    `skip`, `camera` with `leader`/`pick`/`overview`); anything else is ignored.
+    The TV broadcasts a `state` snapshot (phase, track, clock, overlay, ticker,
+    standings, picks) every 500 ms and shortly after changes. Several phones can
+    join; each phone's marble is highlighted and named in the TV results. The
+    receiver app stops when the last phone ends the session.
+    Outside a Cast device, `index.html?tv=1&demo=1` loops races for checking
+    the TV layout.
+  - Sender: `cast.js` loads the Cast sender framework only when an Application
+    ID is configured in `cast-config.js` (`MARBLE_CAST_APP_ID`, or
+    `?castAppId=` for testing). The **Cast to TV** button appears when Chrome
+    reports a Cast device. While casting, the phone pauses its own simulation
+    and rendering (class `remote`) and its lobby, camera, skip and results
+    panels drive and mirror the TV.
+  - Setup (done by the site owner): register a Custom Receiver in the Google
+    Cast SDK Developer Console with receiver URL
+    `https://gentle-field-09d23da03.azurestaticapps.net/assets/marble-race/index.html?tv=1`,
+    put the Application ID in `cast-config.js`, and register the Chromecast's
+    serial number as a test device until the app is published.
+  - Validation: a two-page Chromium test with mocked sender and receiver
+    frameworks (two phones, one TV) covered joining, marble picks, start,
+    camera, skip to results, per-phone results, new track and stopping. Not
+    tested on a real Chromecast; Cast from inside the `/marble-race` iframe and
+    Chromecast GPU performance are unverified. iPhone browsers do not support
+    Google Cast in web pages.
 
 Validation on November 20, 2026: `node --test app/tests/marble-race.test.cjs`
 (9 tests: determinism, course structure, collision, gate/countdown, three full

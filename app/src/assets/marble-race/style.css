@@ -381,6 +381,44 @@ html.fs .ticker { bottom: max(16px, env(safe-area-inset-bottom)); }
 
 .fallback[hidden], .panel[hidden], .skip[hidden] { display: none; }
 
+/* ---------- Chromecast ---------- */
+.cast-backdrop, .tv-only { display: none; }
+
+/* Phone while casting: the TV renders, this page is the remote control. */
+html.remote #scene, html.remote .labels { visibility: hidden; }
+html.remote .stage { background: linear-gradient(160deg, #1c2333, #34405c); }
+html.remote .cast-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 24px;
+  color: #dfe6f3;
+  text-align: center;
+}
+html.remote .cast-backdrop p { margin: 0; max-width: 28em; }
+.cast-icon { font-size: 56px; }
+.cast-target { font-size: 20px; font-weight: 700; color: #fff; }
+html.remote .hud { z-index: 1; }
+#cast[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+/* TV (Chromecast receiver): no controls, larger type, room for overscan. */
+html.tv .bar, html.tv .panel-actions, html.tv .skip, html.tv .fs-tools, html.tv .lobby .hint { display: none; }
+html.tv .tv-only { display: block; color: var(--muted); font-size: 18px; margin: 12px 0 0; }
+html.tv .app { height: 100vh; }
+html.tv .hud { top: 5vh; left: 5vw; transform: scale(1.35); transform-origin: top left; }
+html.tv .ticker { bottom: 6vh; font-size: 24px; }
+html.tv .panel { width: min(760px, 80vw); font-size: 18px; }
+html.tv .panel h2 { font-size: 32px; }
+html.tv .picker { pointer-events: none; }
+html.tv .labels span { font-size: 15px; }
+html.tv #scene { cursor: none; }
+html.tv.results-open .hud { display: none; }
+html.remote .countdown { place-items: start center; padding-top: 18vh; font-size: clamp(56px, 14vw, 120px); }
+
 @media (max-height: 480px) {
   html.fs .standings li:nth-child(n + 6) { display: none; }
   html.fs .standings li { font-size: 12px; padding: 1px 4px; }

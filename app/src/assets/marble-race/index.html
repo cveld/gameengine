@@ -5,10 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Marble Race</title>
   <link rel="stylesheet" href="style.css">
+  <script>
+    // index.html?tv=1 is the Chromecast receiver: TV layout, controlled from phones.
+    if (new URLSearchParams(window.location.search).get("tv") === "1") document.documentElement.classList.add("tv");
+  </script>
+  <script src="cast-config.js" defer></script>
   <script src="race.js" defer></script>
   <script src="render.js" defer></script>
   <script src="sound.js" defer></script>
   <script src="marble.js" defer></script>
+  <script src="cast.js" defer></script>
+  <script src="cast-receiver.js" defer></script>
 </head>
 <body>
   <main class="app">
@@ -35,12 +42,18 @@
           <button type="button" data-cam="overview" aria-pressed="false">Overview</button>
         </div>
         <button type="button" id="sound" aria-pressed="true">Sound on</button>
+        <button type="button" id="cast" aria-pressed="false" hidden title="Show the race on a Chromecast; this screen becomes the remote control">Cast to TV</button>
         <button type="button" id="fullscreen" aria-pressed="false" title="Show the race on the whole screen">Fullscreen</button>
       </div>
     </header>
 
     <section class="stage" aria-label="Marble race">
       <canvas id="scene" aria-label="3D marble race"></canvas>
+      <div class="cast-backdrop" aria-live="polite">
+        <span class="cast-icon" aria-hidden="true">📺</span>
+        <p id="cast-target" class="cast-target">Casting</p>
+        <p>The race runs on the TV. Use this screen as the remote control.</p>
+      </div>
       <div id="labels" class="labels" aria-hidden="true"></div>
 
       <div class="hud">
@@ -58,6 +71,7 @@
       <div id="lobby" class="panel lobby">
         <h2>Pick your marble</h2>
         <p class="hint">Twelve marbles, one obstacle course. Cheer for your favourite: who crosses the finish line first?</p>
+        <p class="tv-only">Pick your marble on your phone and start the race there. Open Marble Race on your phone and tap <strong>Cast to TV</strong> to join.</p>
         <div id="picker" class="picker" role="radiogroup" aria-label="Your marble"></div>
         <p class="course-line"><strong>Course:</strong> <span id="course-list"></span></p>
         <div class="panel-actions">
@@ -71,6 +85,7 @@
         <div id="podium" class="podium"></div>
         <p id="your-result" class="your-result"></p>
         <ol id="result-list" class="result-list"></ol>
+        <p class="tv-only">Start the next race from your phone.</p>
         <div class="panel-actions">
           <button type="button" id="again" class="primary">Race again</button>
           <button type="button" id="again-new">New track</button>

@@ -4,8 +4,12 @@
 
   const Race = window.MarbleRace;
   const $ = id => document.getElementById(id);
+  const root = document.documentElement;
+  // "tv": this page is the Chromecast receiver (index.html?tv=1). It renders the race
+  // and is controlled by phones through cast-receiver.js.
+  const tv = root.classList.contains("tv");
   const canvas = $("scene");
-  const renderer = window.MarbleRender.createRenderer(canvas);
+  const renderer = window.MarbleRender.createRenderer(canvas, { lowPower: tv });
   if (!renderer) {
     $("fallback").hidden = false;
     $("lobby").hidden = true;
@@ -13,6 +17,14 @@
   }
   const sound = window.MarbleSound.createSound();
   const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const randomSeed = () => 1 + Math.floor(Math.random() * 9999);
+
+  // While casting, the phone is a remote control: `remote` forwards commands to the TV
+  // (set by cast.js) and the local simulation and renderer are paused.
+  let remote = null;
+  let tvPicks = [];              // marbles picked by the connected phones (TV only)
+  const listeners = new Set();   // notified when something visible changes (TV only)
+  function notify() { for (const fn of listeners) fn(); }
 
   function storageGet(key) {
     try { return window.localStorage.getItem(key); } catch (error) { return null; }
@@ -38,7 +50,7 @@
   // ---------- state ----------
   const params = new URLSearchParams(window.location.search);
   let seed = parseInt(params.get("track"), 10);
-  if (!(seed > 0)) seed = 1 + Math.floor(Math.random() * 9999);
+  if (!(seed > 0)) seed = randomSeed();
   let pick = Math.max(0, Math.min(Race.MARBLES.length - 1, parseInt(storageGet("marble-race:pick"), 10) || 0));
   let course, race;
   let phase = "lobby";
@@ -48,6 +60,7 @@
   let lastLeaderSection = -1;
   let winnerShownAt = null;
   const cam = { eye: [0, 10, -12], target: [0, 0, 0], yaw: 0, pitch: 0, zoom: 1, fov: 0.95, ready: false };
+  const isMine = id => (tv ? tvPicks.includes(id) : id === pick);
 
   function newRace(newSeed) {
     if (newSeed !== undefined) seed = newSeed;
@@ -61,19 +74,23 @@
     cam.ready = false;
     $("track-name").textContent = `Track ${seed}`;
     $("course-list").textContent = course.sections.slice(1, -1).map(s => s.label).join(" → ");
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set("track", String(seed));
-      window.history.replaceState(null, "", url);
-    } catch (error) { /* ignore */ }
+    if (!tv) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("track", String(seed));
+        window.history.replaceState(null, "", url);
+      } catch (error) { /* ignore */ }
+    }
     buildStandings();
     buildLabels();
     $("results").hidden = true;
+    root.classList.remove("results-open");
     $("skip").hidden = true;
     $("lobby").hidden = false;
     $("countdown").textContent = "";
     $("clock").textContent = formatTime(0);
     $("section").textContent = course.sections[0].label;
+    notify();
   }
 
   // ---------- lobby ----------
@@ -88,10 +105,12 @@
       button.appendChild(dot(marble));
       button.appendChild(document.createTextNode(marble.name));
       button.addEventListener("click", () => {
+        if (tv) return;
         pick = i;
         storageSet("marble-race:pick", String(i));
         for (const b of picker.children) b.setAttribute("aria-checked", "false");
         button.setAttribute("aria-checked", "true");
+        if (remote) remote.pick(i);
         refreshStandings(true);
       });
       picker.appendChild(button);
@@ -106,11 +125,13 @@
     Race.startCountdown(race);
     showCount("3");
     sound.count(false);
+    notify();
   }
 
   function showCount(text) {
     const el = $("countdown");
     el.textContent = text;
+    notify();
     el.classList.remove("pop");
     void el.offsetWidth;
     el.classList.add("pop");
@@ -141,24 +162,38 @@
     refreshStandings(true);
   }
 
+  // Standings as plain entries, so they can be sent to a phone while casting.
+  function standingEntries() {
+    const order = Race.standings(race);
+    const leader = order[0];
+    return order.map((m, i) => {
+      let gap;
+      if (m.finished) gap = formatTime(m.finishTime);
+      else if (race.state === "finished") gap = "DNF";
+      else if (i === 0 || phase === "lobby" || phase === "countdown") gap = "";
+      else gap = `+${Math.max(0, (leader.finished ? course.finishProgress : leader.progress) - m.progress).toFixed(1)} m`;
+      return { id: m.id, finished: m.finished, finishTime: m.finishTime, respawns: m.respawns, gap };
+    });
+  }
+
   let standingsTimer = 0;
   function refreshStandings(force) {
+    if (remote) return;
     if (!force && standingsTimer > 0) return;
     standingsTimer = 0.15;
-    const order = Race.standings(race);
+    renderStandings(standingEntries());
+  }
+  function renderStandings(entries) {
     const list = $("standings");
-    const leader = order[0];
-    const followed = currentTarget();
-    order.forEach((m, i) => {
-      const row = rows.get(m.id);
+    const followed = remote ? null : currentTarget();
+    entries.forEach((entry, i) => {
+      const row = rows.get(entry.id);
+      if (!row) return;
       row.pos.textContent = String(i + 1);
-      row.li.classList.toggle("mine", m.id === pick);
-      row.li.classList.toggle("done", m.finished);
-      row.li.classList.toggle("followed", !!followed && followed.id === m.id && camMode !== "leader");
-      if (m.finished) row.gap.textContent = formatTime(m.finishTime);
-      else if (race.state === "finished") row.gap.textContent = "DNF";
-      else if (i === 0 || phase === "lobby" || phase === "countdown") row.gap.textContent = "";
-      else row.gap.textContent = `+${Math.max(0, (leader.finished ? course.finishProgress : leader.progress) - m.progress).toFixed(1)} m`;
+      row.li.classList.toggle("mine", isMine(entry.id));
+      row.li.classList.toggle("done", entry.finished);
+      row.li.classList.toggle("followed", !!followed && followed.id === entry.id && camMode !== "leader");
+      row.gap.textContent = entry.gap;
       if (list.children[i] !== row.li) list.insertBefore(row.li, list.children[i] || null);
     });
   }
@@ -187,17 +222,20 @@
       el.style.left = `${p.x.toFixed(1)}px`;
       el.style.top = `${p.y.toFixed(1)}px`;
       el.style.opacity = String(Math.max(0.35, 1 - p.depth / 40));
-      el.classList.toggle("mine", m.id === pick);
+      el.classList.toggle("mine", isMine(m.id));
     });
   }
 
   // ---------- ticker ----------
   let tickerTimer = 0;
+  let tickerSeq = 0;
   function say(text, seconds = 2.8) {
     const el = $("ticker");
     el.textContent = text;
     el.classList.add("show");
     tickerTimer = seconds;
+    tickerSeq++;
+    notify();
   }
 
   // ---------- camera ----------
@@ -328,7 +366,7 @@
           phase = "running";
           showCount("GO!");
           sound.count(true);
-          setTimeout(() => { if (phase === "running") $("countdown").textContent = ""; }, 900);
+          setTimeout(() => { if (phase === "running") { $("countdown").textContent = ""; notify(); } }, 900);
           break;
         case "lead":
           say(`${m.name} takes the lead!`);
@@ -343,8 +381,9 @@
             sound.fanfare();
             burstConfetti(m);
             $("skip").hidden = false;
+            notify();
           } else {
-            if (e.place <= 3 || m.id === pick) say(`${m.name} finishes ${ordinal(e.place)}`);
+            if (e.place <= 3 || isMine(m.id)) say(`${m.name} finishes ${ordinal(e.place)}`);
             sound.ding();
           }
           break;
@@ -408,52 +447,74 @@
     phase = "results";
     $("skip").hidden = true;
     timeScale = 1;
-    const order = Race.standings(race);
+    const mine = renderResults(standingEntries());
+    notify();
+    setTimeout(() => {
+      if (phase !== "results") return;
+      $("results").hidden = false;
+      root.classList.add("results-open");
+      notify();
+      if (!tv) $("again").focus({ preventScroll: true });
+      if (mine && mine.place === 1) burstConfetti(Race.MARBLES[mine.id]);
+    }, 1200);
+  }
+
+  // Fills the results panel from standing entries; returns this player's result.
+  function renderResults(entries) {
+    const info = id => Race.MARBLES[id];
     const podium = $("podium");
     podium.textContent = "";
-    order.slice(0, 3).forEach((m, i) => {
+    entries.slice(0, 3).forEach((entry, i) => {
       const step = document.createElement("div");
       step.className = `step p${i + 1}`;
-      const big = dot(m);
       const name = document.createElement("span");
-      name.textContent = m.name;
+      name.textContent = info(entry.id).name;
       const time = document.createElement("small");
-      time.textContent = m.finished ? formatTime(m.finishTime) : "DNF";
+      time.textContent = entry.finished ? formatTime(entry.finishTime) : "DNF";
       const block = document.createElement("div");
       block.className = "block";
       block.textContent = String(i + 1);
-      step.append(big, name, time, block);
+      step.append(dot(info(entry.id)), name, time, block);
       podium.appendChild(step);
     });
-    const winner = order[0];
-    $("results-title").textContent = winner.finished ? `${winner.name} wins!` : "Results";
-    const mine = race.marbles[pick];
-    const place = order.indexOf(mine) + 1;
-    $("your-result").textContent = mine.finished
-      ? (place === 1 ? `Your marble ${mine.name} won the race! \u{1F3C6}` : `Your marble ${mine.name} finished ${ordinal(place)} in ${formatTime(mine.finishTime)}.`)
-      : `Your marble ${mine.name} did not finish in time (${ordinal(place)} on distance).`;
+    const winner = entries[0];
+    $("results-title").textContent = winner.finished ? `${info(winner.id).name} wins!` : "Results";
+    let mine = null;
+    if (tv) {
+      const names = tvPicks.map(id => {
+        const place = entries.findIndex(e => e.id === id) + 1;
+        return `${info(id).name} ${ordinal(place)}`;
+      });
+      $("your-result").textContent = names.length ? `Your marbles: ${names.join(", ")}` : "";
+      $("your-result").hidden = !names.length;
+    } else {
+      const index = entries.findIndex(e => e.id === pick);
+      const entry = entries[index];
+      const place = index + 1;
+      const name = info(pick).name;
+      mine = { id: pick, place };
+      $("your-result").hidden = false;
+      $("your-result").textContent = entry.finished
+        ? (place === 1 ? `Your marble ${name} won the race! \u{1F3C6}` : `Your marble ${name} finished ${ordinal(place)} in ${formatTime(entry.finishTime)}.`)
+        : `Your marble ${name} did not finish in time (${ordinal(place)} on distance).`;
+    }
     const list = $("result-list");
     list.textContent = "";
-    order.forEach((m, i) => {
+    entries.forEach((entry, i) => {
       const li = document.createElement("li");
-      if (m.id === pick) li.className = "mine";
+      if (isMine(entry.id)) li.className = "mine";
       const pos = document.createElement("span");
       pos.className = "pos";
       pos.textContent = `${i + 1}.`;
       const name = document.createElement("span");
-      name.textContent = m.name + (m.respawns ? ` (${m.respawns}× reset)` : "");
+      name.textContent = info(entry.id).name + (entry.respawns ? ` (${entry.respawns}\u00d7 reset)` : "");
       const time = document.createElement("span");
       time.className = "time";
-      time.textContent = m.finished ? (i === 0 ? formatTime(m.finishTime) : `+${(m.finishTime - winner.finishTime).toFixed(2)} s`) : "DNF";
-      li.append(pos, dot(m), name, time);
+      time.textContent = entry.finished ? (i === 0 ? formatTime(entry.finishTime) : `+${(entry.finishTime - winner.finishTime).toFixed(2)} s`) : "DNF";
+      li.append(pos, dot(info(entry.id)), name, time);
       list.appendChild(li);
     });
-    setTimeout(() => {
-      if (phase !== "results") return;
-      $("results").hidden = false;
-      $("again").focus({ preventScroll: true });
-      if (place === 1) burstConfetti(mine);
-    }, 1200);
+    return mine;
   }
 
   // ---------- confetti ----------
@@ -502,16 +563,38 @@
   }
 
   // ---------- controls ----------
-  $("start").addEventListener("click", startRace);
-  $("skip").addEventListener("click", skipToResults);
-  $("new-track").addEventListener("click", () => newRace(1 + Math.floor(Math.random() * 9999)));
-  $("again").addEventListener("click", () => { newRace(); startRace(); });
-  $("again-new").addEventListener("click", () => { newRace(1 + Math.floor(Math.random() * 9999)); });
+  // Each action runs locally, or on the TV while casting.
+  function command(action, extra = {}) {
+    if (remote) { remote.command(action, extra); return; }
+    switch (action) {
+      case "start": startRace(); break;
+      case "skip": skipToResults(); break;
+      case "newTrack": newRace(extra.seed || randomSeed()); break;
+      case "again": newRace(); startRace(); break;
+      case "camera":
+        followId = extra.marble !== undefined ? extra.marble : null;
+        if (extra.mode === "pick" && followId === null) followId = pick;
+        setCam(extra.mode === "pick" ? "marble" : extra.mode);
+        break;
+      default: break;
+    }
+  }
+  $("start").addEventListener("click", () => command("start"));
+  $("skip").addEventListener("click", () => command("skip"));
+  $("new-track").addEventListener("click", () => command("newTrack"));
+  $("again").addEventListener("click", () => command("again"));
+  $("again-new").addEventListener("click", () => command("newTrack"));
   for (const button of document.querySelectorAll("[data-cam]")) {
     button.addEventListener("click", () => {
+      const mode = button.dataset.cam;
+      if (remote) {
+        for (const b of document.querySelectorAll("[data-cam]")) b.setAttribute("aria-pressed", String(b === button));
+        remote.command("camera", { mode, marble: mode === "pick" ? pick : undefined });
+        return;
+      }
       followId = null;
-      if (button.dataset.cam === "pick") followId = pick;
-      setCam(button.dataset.cam);
+      if (mode === "pick") followId = pick;
+      setCam(mode);
     });
   }
   function toggleSound() {
@@ -527,7 +610,6 @@
   // ---------- fullscreen ----------
   // Native fullscreen where the browser allows it (Android, desktop, iPad);
   // otherwise (iPhone Safari) the game asks the wrapper page to fill the screen.
-  const root = document.documentElement;
   const nativeFullscreen = () => document.fullscreenElement || document.webkitFullscreenElement || null;
   const canNative = !!(root.requestFullscreen || root.webkitRequestFullscreen) &&
     (document.fullscreenEnabled !== false && document.webkitFullscreenEnabled !== false);
@@ -590,6 +672,82 @@
     else if (e.key === "Escape" && pseudoFullscreen) setPseudo(false);
   });
 
+  // ---------- casting API ----------
+  // Snapshot of what the TV shows, sent to the phones about twice a second.
+  function snapshot() {
+    return {
+      type: "state",
+      phase,
+      track: seed,
+      overlay: $("countdown").textContent,
+      clock: $("clock").textContent,
+      section: $("section").textContent,
+      ticker: $("ticker").classList.contains("show") ? $("ticker").textContent : "",
+      tickerSeq,
+      skippable: !$("skip").hidden,
+      resultsShown: !$("results").hidden,
+      picks: tvPicks.slice(),
+      standings: standingEntries()
+    };
+  }
+
+  // Phone side: show the TV's state with the local panels.
+  let lastTickerSeq = -1;
+  function applyRemoteState(state) {
+    if (state.track !== seed) newRace(state.track);
+    phase = state.phase;
+    $("lobby").hidden = state.phase !== "lobby";
+    $("countdown").textContent = state.overlay || "";
+    $("clock").textContent = state.clock;
+    $("section").textContent = state.section;
+    $("skip").hidden = !state.skippable;
+    renderStandings(state.standings);
+    if (state.ticker && state.tickerSeq !== lastTickerSeq) {
+      lastTickerSeq = state.tickerSeq;
+      $("ticker").textContent = state.ticker;
+      $("ticker").classList.add("show");
+      tickerTimer = 2.8;
+    }
+    const showResults = state.phase === "results" && state.resultsShown;
+    if (showResults && $("results").hidden) {
+      const mine = renderResults(state.standings);
+      $("results").hidden = false;
+      if (mine && mine.place === 1) burstConfetti(Race.MARBLES[mine.id]);
+    } else if (!showResults) {
+      $("results").hidden = true;
+    }
+  }
+
+  window.MarbleGame = {
+    tv,
+    get pick() { return pick; },
+    snapshot,
+    onChange(fn) { listeners.add(fn); },
+    // TV side: run a command from a phone.
+    command(action, extra = {}) {
+      if (action === "start" || action === "again") sound.unlock();
+      command(action, extra);
+      notify();
+    },
+    setPicks(ids) {
+      tvPicks = ids.filter(id => id >= 0 && id < Race.MARBLES.length);
+      for (const [i, b] of [...$("picker").children].entries()) b.setAttribute("aria-checked", String(tvPicks.includes(i)));
+      refreshStandings(true);
+      notify();
+    },
+    // Phone side: start or stop remote control (null stops it).
+    setRemote(controller, deviceName) {
+      remote = controller;
+      root.classList.toggle("remote", !!controller);
+      $("cast-target").textContent = deviceName ? `Casting to ${deviceName}` : "Casting";
+      if (!controller) {
+        cam.ready = false;
+        newRace();
+      }
+    },
+    applyRemoteState
+  };
+
   // ---------- main loop ----------
   buildPicker();
   newRace();
@@ -597,6 +755,13 @@
   function frame(now) {
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
+    if (remote) {
+      // The TV runs the race; only the ticker fades here.
+      if (tickerTimer > 0 && (tickerTimer -= dt) <= 0) $("ticker").classList.remove("show");
+      drawConfetti(dt);
+      requestAnimationFrame(frame);
+      return;
+    }
     const events = Race.update(race, dt * timeScale);
     handleEvents(events);
     commentary();
@@ -616,10 +781,10 @@
     refreshStandings(false);
     if (tickerTimer > 0) {
       tickerTimer -= dt;
-      if (tickerTimer <= 0) $("ticker").classList.remove("show");
+      if (tickerTimer <= 0) { $("ticker").classList.remove("show"); notify(); }
     }
     const target = phase === "lobby" ? null : currentTarget();
-    for (const m of race.marbles) m.highlight = m.id === pick;
+    for (const m of race.marbles) m.highlight = isMine(m.id);
     sound.rumble(target && target.grounded ? Math.hypot(target.v[0], target.v[1], target.v[2]) : 0);
     updateCamera(dt);
     const scene = { course, marbles: race.marbles, camera: cam, time: race.time };

@@ -272,8 +272,10 @@ void main() {
   gl_FragColor = vec4(col, 1.0);
 }`;
 
-  function createRenderer(canvas) {
-    const attrs = { antialias: true, alpha: false, premultipliedAlpha: false };
+  // options.lowPower: for weak GPUs such as a Chromecast (1x pixels, no MSAA, fewer trees).
+  function createRenderer(canvas, options = {}) {
+    const lowPower = !!options.lowPower;
+    const attrs = { antialias: !lowPower, alpha: false, premultipliedAlpha: false, powerPreference: lowPower ? "low-power" : "default" };
     let gl = canvas.getContext("webgl2", attrs);
     let version = 2;
     if (!gl) { gl = canvas.getContext("webgl", attrs) || canvas.getContext("experimental-webgl", attrs); version = 1; }
@@ -379,7 +381,7 @@ void main() {
       const trees = [];
       const b = course.bounds;
       const pad = 30;
-      for (let i = 0; i < 90; i++) {
+      for (let i = 0; i < (lowPower ? 40 : 90); i++) {
         const x = b.min[0] - pad + rnd() * (b.max[0] - b.min[0] + pad * 2);
         const z = b.min[2] - pad + rnd() * (b.max[2] - b.min[2] + pad * 2);
         const h = 2.5 + rnd() * 3;
@@ -392,7 +394,7 @@ void main() {
       if (lost) return;
       const { course, marbles, camera, time } = scene;
       if (!scenery || scenery.course !== course) prepareScenery(course);
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = lowPower ? 1 : Math.min(window.devicePixelRatio || 1, 2);
       const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
       const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
