@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createBoard } = require("../src/assets/orbit-catch/board.js");
-const { pattern, BPM } = require("../src/assets/orbit-catch/music.js");
+const { createBoard } = require("../public/assets/orbit-catch/board.js");
+const { pattern, BPM } = require("../public/assets/orbit-catch/music.js");
 
 const head = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1.6, 0, 1]; // looking along -Z
 

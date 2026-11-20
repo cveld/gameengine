@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { create, read } = require("../src/assets/orbit/xr-hands.js");
+const { create, read } = require("../public/assets/orbit/xr-hands.js");
 const object = [0, 1.6, -1.8];
 test("Hand summaries distinguish sources, valid poses and proximity without exporting coordinates", () => {
   const hands = create(), input = { handedness: "left" };

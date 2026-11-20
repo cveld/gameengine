@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { create, profile } = require("../src/assets/orbit/xr-diagnostics.js");
+const { create, profile } = require("../public/assets/orbit/xr-diagnostics.js");
 
 test("Minimal AR requests only local tracking without changing VR or free-roam profiles", () => {
   assert.deepEqual(profile("ar", true), { optionalFeatures: [], spaces: ["local"], name: "minimal-local" });

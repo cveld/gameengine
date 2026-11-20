@@ -1,51 +1,28 @@
 {
   "name": "gameengine",
   "version": "0.0.0",
+  "private": true,
   "engines": {
-    "node": "16.x"
+    "node": ">=20"
   },
   "scripts": {
-    "ng": "ng",
-    "start": "ng serve --proxy-config proxy.conf.json --hmr",
-    "start:noproxy": "ng serve --hmr",
-    "build": "ng build",
-    "postbuild": "node scripts/stamp-build.cjs",
-    "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "dev": "vite",
+    "build": "vite build && node scripts/stamp-build.cjs",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/build-version.test.cjs tests/marble-race.test.cjs tests/orbit-catch-board-music.test.cjs tests/orbit-catch-body.test.cjs tests/orbit-catch-game.test.cjs tests/orbit-geometry.test.cjs tests/orbit-relay.test.cjs tests/orbit-sound.test.cjs tests/orbit-xr-diagnostics.test.cjs tests/orbit-xr-hands.test.cjs tests/orbit-xr-math.test.cjs",
+    "test:browser": "node --test tests/site.test.cjs tests/orbit-browser.test.cjs tests/orbit-xr.test.cjs tests/orbit-wireless.test.cjs"
   },
-  "private": true,
   "dependencies": {
-    "@angular/animations": "~12.2.0",
-    "@angular/common": "~12.2.0",
-    "@angular/compiler": "~12.2.0",
-    "@angular/core": "~12.2.0",
-    "@angular/forms": "~12.2.0",
-    "@angular/platform-browser": "~12.2.0",
-    "@angular/platform-browser-dynamic": "~12.2.0",
-    "@angular/router": "~12.2.0",
-    "@microsoft/signalr": "^5.0.8",
-    "@ng-bootstrap/ng-bootstrap": "^10.0.0",
-    "@ngxs/store": "^3.7.2",
-    "bootstrap": "^5.0.2",
-    "bootstrap-icons": "^1.5.0",
-    "guid-typescript": "^1.0.9",
-    "immer": "^9.0.5",
-    "rxjs": "~6.5.0",
-    "tslib": "^2.3.0",
-    "zone.js": "~0.11.4"
+    "@microsoft/signalr": "^8.0.29",
+    "bootstrap": "^5.3.9",
+    "bootstrap-icons": "^1.13.2",
+    "lit": "^3.3.3"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "~12.2.0",
-    "@angular/cli": "~12.2.0",
-    "@angular/compiler-cli": "~12.2.0",
-    "@types/jasmine": "~3.8.0",
-    "@types/node": "^12.11.1",
-    "jasmine-core": "~3.8.0",
-    "karma": "~6.3.0",
-    "karma-chrome-launcher": "~3.1.0",
-    "karma-coverage": "~2.0.3",
-    "karma-jasmine": "~4.0.0",
-    "karma-jasmine-html-reporter": "~1.7.0",
-    "typescript": "~4.3.2"
+    "@types/ws": "^8.18.2",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "ws": "^8.23.0"
   }
 }

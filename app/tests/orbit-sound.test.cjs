@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { pulse, create } = require("../src/assets/orbit/sound.js");
+const { pulse, create } = require("../public/assets/orbit/sound.js");
 const installMockAudio = require("./helpers/mock-audio.cjs");
 const savedContext = globalThis.AudioContext;
 

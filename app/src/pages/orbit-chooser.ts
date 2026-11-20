@@ -1,0 +1,35 @@
+import "@/engine/base";
+import { html, render } from "lit";
+
+render(html`
+  <div class="orbit-chooser" style="padding-bottom: 8px;">
+    <div class="orbit-bar">
+      <a href="/" class="btn btn-outline-secondary btn-sm">Back to home</a>
+      <span class="text-muted">Which Orbit do you want to play?</span>
+    </div>
+    <div class="row g-4 mx-0">
+      <div class="col-md-6">
+        <a href="/orbit/classic" class="text-decoration-none text-dark">
+          <div class="card h-100 shadow-sm tile">
+            <div class="card-body text-center py-4">
+              <i class="bi bi-globe" style="font-size: 3rem;" aria-hidden="true"></i>
+              <h2 class="card-title mt-3">Classic Orbit</h2>
+              <p class="card-text text-muted">Explore living 3D sculptures in the browser, VR or AR</p>
+            </div>
+          </div>
+        </a>
+      </div>
+      <div class="col-md-6">
+        <a href="/orbit/catch" class="text-decoration-none text-dark">
+          <div class="card h-100 shadow-sm tile">
+            <div class="card-body text-center py-4">
+              <i class="bi bi-stars" style="font-size: 3rem;" aria-hidden="true"></i>
+              <h2 class="card-title mt-3">Orbit Catch</h2>
+              <p class="card-text text-muted">New: walk around in WebXR and catch falling objects with your hands for points</p>
+            </div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+`, document.getElementById("app")!);

@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createGame, KINDS, ROUND_SECONDS } = require("../src/assets/orbit-catch/game.js");
+const { createGame, KINDS, ROUND_SECONDS } = require("../public/assets/orbit-catch/game.js");
 
 function sequence(values) {
   let i = 0;

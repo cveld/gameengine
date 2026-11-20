@@ -1,0 +1,24 @@
+{
+  "routes": [
+    { "route": "/engine", "rewrite": "/engine/index.html" },
+    { "route": "/engine/*", "rewrite": "/engine/index.html" },
+    { "route": "/memory", "rewrite": "/memory/index.html" },
+    { "route": "/simon", "rewrite": "/simon/index.html" },
+    { "route": "/coop", "rewrite": "/coop/index.html" },
+    { "route": "/maze", "rewrite": "/play/index.html" },
+    { "route": "/maze-rooms", "rewrite": "/play/index.html" },
+    { "route": "/flappy-muis", "rewrite": "/play/index.html" },
+    { "route": "/marble-race", "rewrite": "/play/index.html" },
+    { "route": "/orbit/catch", "rewrite": "/play/index.html" },
+    { "route": "/orbit/classic", "rewrite": "/orbit/classic/index.html" },
+    { "route": "/orbit/diagnostics", "rewrite": "/orbit/diagnostics/index.html" },
+    { "route": "/orbit", "rewrite": "/orbit/index.html" }
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/assets/*", "/_app/*", "/api/*", "*.{png,jpg,gif,ico,svg,js,css,json,woff,woff2,map}"]
+  },
+  "platform": {
+    "apiRuntime": "node:22"
+  }
+}

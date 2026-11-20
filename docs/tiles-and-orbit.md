@@ -5,55 +5,54 @@ user-requested WebGL browser adaptation.
 
 ## Home-page tile structure
 
-The home page is `app/src/app/home/home.component.html`. Each tile is a Bootstrap
-card inside a `col-md-4`, with an Angular `routerLink`, an icon, a title, and a
-description. Hover styling is in `home.component.scss`.
+Since November 20, 2026 the site is Vite + TypeScript + Lit (see
+`app/README.md`); the Angular app, its routing module and its per-game
+wrapper components are gone. Sections below that describe Angular components
+(`OrbitComponent`, `OrbitCatchComponent`, `MarbleRaceComponent`, `.orbit-fit`
+in `styles.scss`, ...) are history; their behavior was ported as listed here.
 
-The existing destinations at inspection time were:
+The home page (`app/pages/index.html`, `app/src/pages/home.ts`) renders one
+Bootstrap card per entry of `app/src/engine/catalog.ts` that is not `hidden`,
+in catalog order: `/engine`, `/memory`, `/simon`, `/maze`, `/maze-rooms`,
+`/flappy-muis`, `/coop`, `/orbit`, `/marble-race`. Tile hover styling is in
+`app/src/styles/site.css`.
 
-- `/engine`: card-game engine
-- `/memory`: memory game
-- `/simon`: Simon Says
-- `/maze`: Dungeon Maze
-- `/maze-rooms`: Dungeon Maze rooms
-- `/flappy-muis`: Flappy Muis
-- `/orbit`: Orbit chooser (added November 11, 2026); classic Orbit moved to
-  `/orbit/classic`, the Orbit Catch game is at `/orbit/catch`
-- `/coop`: Tandem Ruimteschip (preserved when integrating the newer main branch)
-- `/marble-race`: Marble Race (added November 20, 2026), see below
-
-Routes are registered in `app/src/app/app-routing.module.ts`. Page components
-are declared in `app/src/app/components/components.module.ts`, which is imported
-by `app/src/app/app.module.ts`; do not assume new pages should be declared
-directly in `AppModule`.
+Routes are rewrites in `app/public/staticwebapp.config.json` (Azure Static
+Web Apps); the Vite dev server and the browser tests apply the same rewrites.
+Unknown URLs show the home page.
 
 ## Embedded browser-game pattern
 
-Maze, Maze Rooms, and Flappy Muis use Angular wrapper components around static
-HTML games under `app/src/assets/`.
+Static games live in `app/public/assets/<game>/` and keep their URLs
+(`/assets/<game>/index.html`, used directly on the Quest). Their routes
+(`/maze`, `/maze-rooms`, `/flappy-muis`, `/marble-race`, `/orbit/catch`)
+rewrite to `app/pages/play/index.html` (`app/src/pages/play.ts`), which looks
+the path up in the catalog and shows the game in an iframe with a fixed,
+same-origin URL:
 
-For a representative implementation, read:
+- `layout: "boxed"` (Maze, Maze Rooms, Flappy Muis): title bar with
+  "Terug naar start" and a sized frame (styles in `app/src/styles/play.css`,
+  same sizes as the Angular wrappers).
+- `layout: "fit"` (Orbit Catch, Marble Race): the game fills the page; its own
+  header holds the back link. A message is accepted only from that frame and
+  the page's origin: `back.message` navigates to the catalog's fixed
+  `back.target` (`orbit:back` to `/orbit`, `marble:back` to `/`);
+  `marble:immersive` toggles the iPhone fullscreen fallback.
 
-- `app/src/app/flappy-muis/flappy-muis.component.ts`
-- `app/src/app/flappy-muis/flappy-muis.component.html`
-- `app/src/app/flappy-muis/flappy-muis.component.scss`
-- `app/src/assets/flappy-muis/index.html`
+Classic Orbit (`/orbit/classic`, `app/src/games/orbit/orbit-classic.ts`) keeps
+its own page because of the resize messages and the wireless diagnostics
+relay; `/orbit/diagnostics` is the PC console and `/orbit` the chooser.
 
-The wrapper uses `DomSanitizer.bypassSecurityTrustResourceUrl` with a hard-coded
-local asset URL and renders it in a titled iframe. Keep trusted URLs fixed;
-do not apply the sanitizer bypass to arbitrary user-provided URLs.
-
-`app/angular.json` includes `src/assets` in the build assets. A browser-based
-addition following this pattern needs an asset entry point, an Angular wrapper,
-a component declaration, a route, and a home-page tile.
+Adding a static game: put it in `app/public/assets/<game>/`, add a catalog
+entry with `embed`, and add a rewrite of its route to `/play/index.html`.
 
 ## Marble Race
 
 Added on November 20, 2026 at the user's request ("a fun marble race: marbles
 roll through a 3D world full of obstacles, a real race with a winner"). The home
-tile routes to `/marble-race`, `MarbleRaceComponent`
-(`app/src/app/marble-race`), an iframe of the fixed asset URL
-`assets/marble-race/index.html`. The wrapper fills the viewport above the version
+tile routes to `/marble-race`, which (since the Vite migration) is the generic
+`play` page with the catalog entry `marble-race`: an iframe of the fixed asset
+URL `/assets/marble-race/index.html`. The page fills the viewport above the version
 footer (no page scroll). The asset's header has its own back link; embedded, it
 posts `marble:back`, and the wrapper validates origin and frame before navigating
 to the fixed target `/`. Standalone, the link is a plain link to `/`.
@@ -92,7 +91,7 @@ The asset is self-contained (no CDN, dependencies, network calls or telemetry):
 - Fullscreen (added the same day on request, for phones): the header's
   Fullscreen button (or F) requests native fullscreen of the asset document and
   tries a landscape orientation lock. Where element fullscreen is unavailable
-  (iPhone Safari) the game posts `marble:immersive` and the wrapper turns its
+  (iPhone Safari) the game posts `marble:immersive` and the play page turns its
   container into a fixed, viewport-filling layer (`.immersive`, `100dvh`); the
   browser's own UI stays visible there. In both modes the header is hidden and
   floating "Camera" and "Exit fullscreen" buttons appear (safe-area aware).
@@ -181,7 +180,7 @@ The browser edition is a JavaScript/WebGL adaptation, not a compiled Qt/WinUI
 binary and not a launcher for the local desktop installation. No files in the
 original Orbit directory are modified.
 
-Assets are self-contained under `app/src/assets/orbit`:
+Assets are self-contained under `app/public/assets/orbit`:
 
 - `index.html` and `style.css`: responsive viewer and native HTML controls.
 - `geometry.js`: the three parametrically defined surfaces, spike placement,

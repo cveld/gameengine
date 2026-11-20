@@ -5,9 +5,10 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const rewrite = require("./helpers/swa-routes.cjs");
 const { chromium } = require(process.env.ORBIT_PLAYWRIGHT_MODULE || "playwright");
 
-const root = path.resolve(process.env.ORBIT_TEST_ROOT || path.join(__dirname, "../src"));
+const root = path.resolve(process.env.ORBIT_TEST_ROOT || path.join(__dirname, "../public"));
 let browser, server, origin;
 const errors = [];
 const mime = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png" };
@@ -21,7 +22,7 @@ test("Built website and Orbit show the same stamped commit on mobile", { skip: !
     assert.ok(await page.locator('script[src^="xr.js"]').getAttribute("src").then(src => src.includes("?v=" + full.slice(0, 40))));
     await page.goto(origin + "/orbit/classic");
     assert.equal(await page.locator("body > .build-version [data-build-version]").textContent(), label);
-    const frame = page.frameLocator("app-orbit iframe");
+    const frame = page.frameLocator("orbit-classic iframe");
     await frame.locator("[data-build-version]").waitFor();
     assert.equal(await frame.locator("[data-build-version]").textContent(), label);
     assert.equal(await frame.locator("[data-build-version]").getAttribute("title"), full);
@@ -35,11 +36,11 @@ test("Built website and Orbit show the same stamped commit on mobile", { skip: !
 before(async () => {
   server = http.createServer((req, res) => {
     const pathname = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
-    let file = path.resolve(root, "." + pathname);
+    let file = path.resolve(root, "." + rewrite(pathname));
     if (file !== root && !file.startsWith(root + path.sep)) { res.writeHead(403).end(); return; }
     if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, "index.html");
     if (!fs.existsSync(file)) {
-      // Support Angular routes only when running against a built app.
+      // Unknown pages fall back to the home page, as on Azure.
       const index = path.join(root, "index.html");
       if (fs.existsSync(index) && !path.extname(pathname)) file = index;
       else { res.writeHead(404).end(); return; }
