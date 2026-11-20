@@ -20,6 +20,7 @@ The existing destinations at inspection time were:
 - `/orbit`: Orbit chooser (added November 11, 2026); classic Orbit moved to
   `/orbit/classic`, the Orbit Catch game is at `/orbit/catch`
 - `/coop`: Tandem Ruimteschip (preserved when integrating the newer main branch)
+- `/marble-race`: Marble Race (added November 20, 2026), see below
 
 Routes are registered in `app/src/app/app-routing.module.ts`. Page components
 are declared in `app/src/app/components/components.module.ts`, which is imported
@@ -45,6 +46,67 @@ do not apply the sanitizer bypass to arbitrary user-provided URLs.
 `app/angular.json` includes `src/assets` in the build assets. A browser-based
 addition following this pattern needs an asset entry point, an Angular wrapper,
 a component declaration, a route, and a home-page tile.
+
+## Marble Race
+
+Added on November 20, 2026 at the user's request ("a fun marble race: marbles
+roll through a 3D world full of obstacles, a real race with a winner"). The home
+tile routes to `/marble-race`, `MarbleRaceComponent`
+(`app/src/app/marble-race`), an iframe of the fixed asset URL
+`assets/marble-race/index.html`. The wrapper fills the viewport above the version
+footer (no page scroll). The asset's header has its own back link; embedded, it
+posts `marble:back`, and the wrapper validates origin and frame before navigating
+to the fixed target `/`. Standalone, the link is a plain link to `/`.
+
+The asset is self-contained (no CDN, dependencies, network calls or telemetry):
+
+- `race.js`: pure, Node-tested course generation and physics (CommonJS export).
+  A seeded course is a starting gate, six of nine obstacle sections in random
+  order, and a home straight with a finish line. Sections are joined by tilted
+  corner pads with a 45-degree deflector, alternating left/right so the course
+  descends as a staircase without overlapping. Obstacles: peg forest, windmills
+  (rotating bars), hammer alley (swinging pendulums), pushers, bumper garden,
+  washboard (rounded rails), big drop (kicker ramp onto a lower deck that
+  always catches the marbles), bottleneck (funnel) and split path.
+  Physics: 12 marbles (radius 0.3 m), fixed 240 Hz steps, sphere vs oriented
+  box/capsule contacts with restitution, kinematic obstacles whose surface
+  velocity is derived from their previous transform, marble-marble impulses and
+  rolling orientation. Marbles that fall off are reset to the last checkpoint;
+  a marble without progress for 4 s gets one nudge, after 10 s it is reset.
+  Progress is measured along the course centre line; the race closes when all
+  marbles finish, 30 s after the winner, or after 240 s (others are DNF).
+  Gaps between posts/bumpers and walls are at least about 0.7 m so marbles
+  cannot wedge; keep that when adding obstacles.
+- `render.js`: WebGL 2 (WebGL 1 fallback) renderer with GLSL ES 1.00: sky
+  gradient, ground with trees, support pillars, lit track, glossy swirled
+  marbles and blob shadows (ray cast down onto floor boxes).
+- `sound.js`: synthesized clacks, bumper boings, countdown beeps, finish
+  fanfare and a rolling rumble (Web Audio, started by the Start click).
+- `marble.js`: lobby (pick your marble, stored in `localStorage` when
+  available), countdown, follow cameras (Leader, My marble, Overview; click a
+  standings row to follow that marble; drag, wheel/pinch, double-click reset;
+  keys 1/2/3 and M), live standings with gaps, name labels, commentary ticker,
+  photo-finish slow motion (off with reduced motion), confetti, "Skip to
+  results" after the winner, and a podium/results panel with Race again (same
+  track) and New track. The track seed is kept in `?track=` inside the frame.
+- Fullscreen (added the same day on request, for phones): the header's
+  Fullscreen button (or F) requests native fullscreen of the asset document and
+  tries a landscape orientation lock. Where element fullscreen is unavailable
+  (iPhone Safari) the game posts `marble:immersive` and the wrapper turns its
+  container into a fixed, viewport-filling layer (`.immersive`, `100dvh`); the
+  browser's own UI stays visible there. In both modes the header is hidden and
+  floating "Camera" and "Exit fullscreen" buttons appear (safe-area aware).
+  The back link stays in the normal header. Checked with Chromium Pixel 7
+  landscape emulation for both paths; not checked on a physical phone.
+
+Validation on November 20, 2026: `node --test app/tests/marble-race.test.cjs`
+(9 tests: determinism, course structure, collision, gate/countdown, three full
+races with a winner and complete ranking, fall-off reset). A headless Chromium
+check (software WebGL) of the built app navigated home -> tile -> lobby ->
+race -> winner -> Skip to results -> back link -> home without page errors.
+Simulated races over 16 seeds: winner after roughly 37-50 s, usually all 12
+marbles finish. Performance on real phones and the feel of the physics have not
+been checked on a physical device.
 
 ## Orbit source location and architecture
 

@@ -15,6 +15,7 @@ import { OrbitComponent } from './orbit/orbit.component';
 import { OrbitDiagnosticsComponent } from './orbit/orbit-diagnostics.component';
 import { OrbitChooserComponent } from './orbit-chooser/orbit-chooser.component';
 import { OrbitCatchComponent } from './orbit-catch/orbit-catch.component';
+import { MarbleRaceComponent } from './marble-race/marble-race.component';
 const routes: Routes = [
   { path: '', component: HomeComponent },
   {
@@ -35,6 +36,7 @@ const routes: Routes = [
   { path: 'orbit/classic', component: OrbitComponent },
   { path: 'orbit/catch', component: OrbitCatchComponent },
   { path: 'orbit', component: OrbitChooserComponent },
+  { path: 'marble-race', component: MarbleRaceComponent },
   { path: '**', redirectTo: '' },
 ];
 

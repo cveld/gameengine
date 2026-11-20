@@ -20,6 +20,7 @@ import { OrbitComponent } from "../orbit/orbit.component";
 import { OrbitDiagnosticsComponent } from "../orbit/orbit-diagnostics.component";
 import { OrbitChooserComponent } from "../orbit-chooser/orbit-chooser.component";
 import { OrbitCatchComponent } from "../orbit-catch/orbit-catch.component";
+import { MarbleRaceComponent } from "../marble-race/marble-race.component";
 
 @NgModule({
   declarations: [
@@ -40,7 +41,8 @@ import { OrbitCatchComponent } from "../orbit-catch/orbit-catch.component";
     OrbitComponent,
     OrbitDiagnosticsComponent,
     OrbitChooserComponent,
-    OrbitCatchComponent
+    OrbitCatchComponent,
+    MarbleRaceComponent
   ],
   imports: [
     AppRoutingModule,

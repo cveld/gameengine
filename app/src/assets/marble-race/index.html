@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Marble Race</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="race.js" defer></script>
+  <script src="render.js" defer></script>
+  <script src="sound.js" defer></script>
+  <script src="marble.js" defer></script>
+</head>
+<body>
+  <main class="app">
+    <header class="bar">
+      <a id="back-link" class="back-link" href="/">Back to start</a>
+      <script>
+        // Runs while the header is parsed, so the link works before the game scripts load.
+        (function () {
+          var link = document.getElementById("back-link");
+          if (window.parent === window) return;
+          document.documentElement.classList.add("embedded");
+          link.addEventListener("click", function (event) {
+            event.preventDefault();
+            window.parent.postMessage({ type: "marble:back" }, window.location.origin);
+          });
+        })();
+      </script>
+      <h1 class="title">Marble Race</h1>
+      <span id="track-name" class="track-name"></span>
+      <div class="bar-actions">
+        <div class="cams" role="group" aria-label="Camera">
+          <button type="button" data-cam="leader" aria-pressed="true">Leader</button>
+          <button type="button" data-cam="pick" aria-pressed="false">My marble</button>
+          <button type="button" data-cam="overview" aria-pressed="false">Overview</button>
+        </div>
+        <button type="button" id="sound" aria-pressed="true">Sound on</button>
+        <button type="button" id="fullscreen" aria-pressed="false" title="Show the race on the whole screen">Fullscreen</button>
+      </div>
+    </header>
+
+    <section class="stage" aria-label="Marble race">
+      <canvas id="scene" aria-label="3D marble race"></canvas>
+      <div id="labels" class="labels" aria-hidden="true"></div>
+
+      <div class="hud">
+        <div class="clock"><span id="clock">0:00.0</span><span id="section" class="section"></span></div>
+        <ol id="standings" class="standings" aria-label="Standings"></ol>
+      </div>
+      <p id="ticker" class="ticker" role="status" aria-live="polite"></p>
+      <div id="countdown" class="countdown" aria-live="assertive"></div>
+      <button type="button" id="skip" class="skip" hidden>Skip to results</button>
+      <div class="fs-tools" aria-label="Fullscreen controls">
+        <button type="button" id="fs-cam" title="Switch camera">Camera: Leader</button>
+        <button type="button" id="fs-exit">Exit fullscreen</button>
+      </div>
+
+      <div id="lobby" class="panel lobby">
+        <h2>Pick your marble</h2>
+        <p class="hint">Twelve marbles, one obstacle course. Cheer for your favourite: who crosses the finish line first?</p>
+        <div id="picker" class="picker" role="radiogroup" aria-label="Your marble"></div>
+        <p class="course-line"><strong>Course:</strong> <span id="course-list"></span></p>
+        <div class="panel-actions">
+          <button type="button" id="start" class="primary">Start race</button>
+          <button type="button" id="new-track">New track</button>
+        </div>
+      </div>
+
+      <div id="results" class="panel results" hidden>
+        <h2 id="results-title">Results</h2>
+        <div id="podium" class="podium"></div>
+        <p id="your-result" class="your-result"></p>
+        <ol id="result-list" class="result-list"></ol>
+        <div class="panel-actions">
+          <button type="button" id="again" class="primary">Race again</button>
+          <button type="button" id="again-new">New track</button>
+        </div>
+      </div>
+
+      <canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
+      <p id="fallback" class="fallback" hidden>Your browser does not support WebGL, so the 3D marble race cannot be shown.</p>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,26 @@
+// The game fills the viewport above the shell's version footer, so the page does not scroll.
+.marble-race-fit {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--build-version-height, 42px));
+  min-height: 520px;
+  background: #cfdcee;
+}
+
+.marble-race-frame {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  border: none;
+}
+
+// Page-filling fallback for browsers without element fullscreen (iPhone Safari).
+.marble-race-fit.immersive {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+}
