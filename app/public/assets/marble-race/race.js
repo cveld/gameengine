@@ -35,8 +35,16 @@
     "pegs", "spinners", "hammers", "pushers", "bumpers", "washboard", "drop", "funnel", "split"
   ]);
 
+  // Worlds: the same obstacles, a different look and pace. Lava is steeper and
+  // faster, and has boulders on the route.
+  const WORLDS = Object.freeze({
+    meadow: Object.freeze({ id: "meadow", label: "Meadow", slopeScale: 1, maxSpeed: 13 }),
+    lava: Object.freeze({ id: "lava", label: "Lava cave", slopeScale: 2.5, maxSpeed: 24 })
+  });
+
   const MODULE_LABELS = Object.freeze({
     start: "Starting gate",
+    boulders: "Boulder field",
     pegs: "Peg forest",
     spinners: "Windmills",
     hammers: "Hammer alley",
@@ -110,6 +118,10 @@
   // ---------- course building ----------
   function buildCourse(seed, options = {}) {
     const random = createRng(seed);
+    const world = WORLDS[options.world] || WORLDS.meadow;
+    const lava = world.id === "lava";
+    // Separate stream for the lava extras, so meadow tracks stay exactly as before.
+    const extra = createRng((seed * 7919 + 17) >>> 0);
     const moduleCount = options.moduleCount || 6;
     const solids = [];
     const deco = [];
@@ -163,6 +175,12 @@
       }, opts));
     }
 
+    // A boulder resting on the floor (a sphere, rendered as a rough rock).
+    function rock(F, u, w, radius) {
+      const c = F.at(u, radius * 0.55, w);
+      return push({ type: "capsule", a: c, b: c.slice(), r: radius, color: lava ? [0.4, 0.33, 0.3] : [0.5, 0.47, 0.43], e: 0.35, tag: "rock", rock: true });
+    }
+
     function post(F, u, w, radius, height, opts = {}) {
       return push(Object.assign({
         type: "capsule",
@@ -181,7 +199,14 @@
       [0.95, 0.42, 0.32], [0.98, 0.76, 0.28], [0.36, 0.72, 0.95], [0.55, 0.85, 0.45],
       [0.75, 0.55, 0.95], [0.98, 0.55, 0.75], [0.35, 0.85, 0.8], [0.95, 0.6, 0.25]
     ];
+    const lavaPalette = [
+      [1.0, 0.42, 0.1], [0.95, 0.25, 0.12], [1.0, 0.62, 0.18], [0.85, 0.2, 0.25], [1.0, 0.5, 0.3]
+    ];
     function sectionColors(i) {
+      if (lava) {
+        const accent = lavaPalette[i % lavaPalette.length];
+        return { floor: [0.46, 0.42, 0.4], wall: [0.3, 0.25, 0.24], accent };
+      }
       const accent = palette[i % palette.length];
       return { floor: [0.9, 0.9, 0.93], wall: accent, accent };
     }
@@ -393,6 +418,20 @@
         return { exit: F.at(0, 0, Ls), Ls };
       },
 
+      // Boulders scattered down a steep lane. Gaps to the walls and between
+      // boulders are at least ~0.75 m so no marble can wedge.
+      boulders(F, colors, rnd) {
+        const Lh = 16, Ls = Lh * F.sec;
+        floorAndWalls(F, 0, Ls, colors);
+        let row = 0;
+        for (let w = 2.4; w < Ls - 1.6; w += 2.1, row++) {
+          const jitter = () => (rnd() - 0.5) * 0.16;
+          if (row % 2) rock(F, jitter(), w, 0.44 + rnd() * 0.06);
+          else for (const u of [-0.95, 0.95]) rock(F, u + jitter(), w + jitter(), 0.36 + rnd() * 0.06);
+        }
+        return { exit: F.at(0, 0, Ls), Ls };
+      },
+
       finish(F, colors) {
         const Lh = 20, Ls = Lh * F.sec;
         floorAndWalls(F, 0, Ls, colors);
@@ -434,8 +473,11 @@
 
     // Choose modules.
     const chosen = shuffle(MODULE_TYPES, random).slice(0, Math.min(moduleCount, MODULE_TYPES.length));
+    if (lava) chosen.splice(1 + Math.floor(extra() * (chosen.length - 1)), 1, "boulders");
     const sequence = ["start"].concat(chosen, ["finish"]);
-    const slopes = { start: 0.14, pegs: 0.2, spinners: 0.18, hammers: 0.17, pushers: 0.17, bumpers: 0.19, washboard: 0.22, drop: 0.16, funnel: 0.17, split: 0.18, finish: 0.08 };
+    const baseSlopes = { start: 0.14, pegs: 0.2, spinners: 0.18, hammers: 0.17, pushers: 0.17, bumpers: 0.19, washboard: 0.22, drop: 0.16, funnel: 0.17, split: 0.18, boulders: 0.2, finish: 0.08 };
+    const slopes = {};
+    for (const key of Object.keys(baseSlopes)) slopes[key] = baseSlopes[key] * (key === "start" ? 1 : world.slopeScale);
 
     let S = [0, 0, 0];
     let heading = [0, 0, 1];
@@ -447,7 +489,15 @@
       const colors = sectionColors(i);
       const pathStart = path.length;
       addPath(lift(F.at(0, 0, type === "start" ? 0.5 : 0), R));
-      const result = modules[type](F, colors, random);
+      const result = modules[type](F, colors, type === "boulders" ? extra : random);
+      if (lava && type !== "start" && type !== "boulders") {
+        // A boulder where each lane begins, before its obstacles, on a random side.
+        rock(F, (extra() < 0.5 ? -1 : 1) * 0.92, 1.1, 0.34);
+        if (type === "finish") {
+          rock(F, (extra() < 0.5 ? -1 : 1) * 0.92, 4.4, 0.36);
+          rock(F, 0, 7.6, 0.4);
+        }
+      }
       addPath(lift(result.exit, R));
       checkpoints.push({ module: i, position: lift(F.at(0, 0, type === "start" ? 4 : 1.2), R + 0.05), pathIndex: pathStart });
       sections.push({ type, label: MODULE_LABELS[type], pathIndex: pathStart, frame: F, colors });
@@ -476,7 +526,7 @@
     }
 
     const course = {
-      seed, solids, deco, path, cum, checkpoints, sections, pads, slots, bounds,
+      seed, world: world.id, maxSpeed: world.maxSpeed, solids, deco, path, cum, checkpoints, sections, pads, slots, bounds,
       length: cum[cum.length - 1],
       finish
     };
@@ -511,7 +561,9 @@
     if (dx * dx + dy * dy + dz * dz > bound * bound) return null;
     if (solid.type === "capsule") {
       const a = solid.a, ab = sub(solid.b, a);
-      const t = Math.max(0, Math.min(1, dot(sub(p, a), ab) / dot(ab, ab)));
+      const l2 = dot(ab, ab);
+      // A zero-length capsule (a boulder) is a sphere.
+      const t = l2 > 1e-12 ? Math.max(0, Math.min(1, dot(sub(p, a), ab) / l2)) : 0;
       const q = madd(a, ab, t);
       const d = sub(p, q);
       const dist = len(d);
@@ -689,7 +741,8 @@
       if (m.parked) continue;
       m.v[1] -= G * dt;
       const sp = len(m.v);
-      if (sp > MAX_SPEED) m.v = scale(m.v, MAX_SPEED / sp);
+      const cap = course.maxSpeed || MAX_SPEED;
+      if (sp > cap) m.v = scale(m.v, cap / sp);
       m.v = scale(m.v, 1 - AIR_DRAG * dt);
       m.p = madd(m.p, m.v, dt);
       m.grounded = false;
@@ -870,7 +923,7 @@
   }
 
   const api = {
-    R, W, DT, MARBLES, MODULE_TYPES, MODULE_LABELS,
+    R, W, DT, MARBLES, MODULE_TYPES, MODULE_LABELS, WORLDS,
     createRng, buildCourse, createRace, startCountdown, update, standings,
     projectProgress, collide, floorBelow, makeFrame
   };

@@ -97,6 +97,22 @@ The asset is self-contained (no CDN, dependencies, network calls or telemetry):
   floating "Camera" and "Exit fullscreen" buttons appear (safe-area aware).
   The back link stays in the normal header. Checked with Chromium Pixel 7
   landscape emulation for both paths; not checked on a physical phone.
+- Worlds (added November 20, 2026 on request). The lobby picks **Meadow**
+  (the original) or **Lava cave**; the choice is kept in `localStorage` and in
+  `?world=` and is part of the course (`buildCourse(seed, { world })`), so
+  Chromecast phones switch the TV's world with a `world` command.
+  - Lava: every slope except the start is 2.5x steeper and the speed cap is
+    24 m/s instead of 13 (simulated winners about 35 s instead of 45 s). One
+    module is replaced by **Boulder field** (staggered boulders), and a boulder
+    sits at the start of every other lane, on a random side, plus three on the
+    home straight; gaps stay at least about 0.75 m. Boulders are zero-length
+    capsules (spheres), which `collide` handles without dividing by zero.
+    The lava extras use their own random stream, so meadow tracks are
+    unchanged for the same seed.
+  - Look: dark cave sky, a self-lit flowing lava floor, stalagmites kept 9 m
+    away from the track, basalt pillars, warm light from below, glowing
+    obstacles, rough rock meshes. Marbles that fly off "fall into the lava"
+    (ticker and a sizzle sound) and are reset as before.
 - Chromecast (added November 20, 2026 on request). Google Cast with a custom
   Web Receiver; the TV runs the race, phones are remote controls.
   - Receiver: `index.html?tv=1` (class `tv`: no controls, larger type, overscan

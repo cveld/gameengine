@@ -60,13 +60,17 @@
         updatePicks();
         send(event.senderId);
       } else if (message.type === "command") {
-        const allowed = ["start", "again", "newTrack", "skip", "camera"];
+        const allowed = ["start", "again", "newTrack", "skip", "camera", "world"];
         if (!allowed.includes(message.action)) return;
         const extra = {};
         if (message.action === "camera") {
           if (!["leader", "pick", "overview"].includes(message.mode)) return;
           extra.mode = message.mode;
           if (Number.isInteger(message.marble)) extra.marble = message.marble;
+        }
+        if (message.action === "world") {
+          if (!["meadow", "lava"].includes(message.world)) return;
+          extra.world = message.world;
         }
         game.command(message.action, extra);
       }
