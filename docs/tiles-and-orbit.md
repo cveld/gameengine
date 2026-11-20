@@ -706,7 +706,9 @@ older Orbit assets, and no hardcoded self-referential commit in source.
 
 The workflow prepares ignored `.build-commit.json` from `GITHUB_SHA` before
 the hosted build and explicitly uses `npm run build`; prepared metadata is
-the fallback if Git is unavailable in the build container. Missing/duplicate
+the fallback if Git is unavailable in the build container.
+Since November 20, 2026 the workflow builds incrementally and runs
+`scripts/stamp-build.cjs` itself; see [Deployment pipeline](deployment.md). Missing/duplicate
 HTML markers and invalid hashes fail stamping rather than inventing a version.
 When using the direct Angular CLI, run `node scripts/stamp-build.cjs` afterward.
 This hook uses the project's default `dist/gameengine` output path.

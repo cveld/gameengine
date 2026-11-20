@@ -7,6 +7,8 @@ read `app/README.md` and the relevant source files.
 
 - Before adding or changing home-page tiles, routes, embedded games, or Orbit
   integration, read [Tiles and Orbit integration](docs/tiles-and-orbit.md).
+- Before changing the GitHub Actions workflow, build caching or deployment,
+  read [Deployment pipeline](docs/deployment.md).
 
 ## Working conventions
 
