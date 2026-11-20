@@ -1,39 +1,155 @@
 name: Azure Static Web Apps CI/CD
 
+# Incremental pipeline: only rebuild what changed. See docs/deployment.md.
+# - Angular bundle: rebuilt only when Angular sources/config/lockfile change
+#   (cache key = hash of those files). Game assets are copied in every run.
+# - API: rebuilt only when api/ changes (cache key = hash of api/).
+# - Highscores Function App: deployed only when api/ changed in the push.
+# - Documentation-only pushes do not deploy.
+
 on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "LICENSE"
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Ignore build caches and redeploy everything (including the Highscores Function App)"
+        type: boolean
+        default: false
+
+# One deployment per branch at a time; a newer pending run replaces an older pending one.
+concurrency:
+  group: deploy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
+      # Keys are computed before anything is built, so build output never affects them.
+      - name: Compute cache keys
+        id: keys
+        run: |
+          echo "angular=angular-v1-node16-${{ hashFiles('app/**', '!app/src/assets/**', '!app/tests/**', '!app/scripts/**', '!app/**/*.md', '!app/**/*.spec.ts', '!app/src/app/staticwebapp.config.json', '!app/node_modules/**', '!app/dist/**') }}" >> "$GITHUB_OUTPUT"
+          echo "modules=node-modules-v1-node16-${{ hashFiles('app/package-lock.json') }}" >> "$GITHUB_OUTPUT"
+          echo "api=swa-api-v1-node22-${{ hashFiles('api/**', '!api/node_modules/**', '!api/dist/**') }}" >> "$GITHUB_OUTPUT"
+
+      # ---------- Angular application ----------
+      - name: Restore Angular build
+        id: angular
+        if: inputs.full != true
+        uses: actions/cache/restore@v4
         with:
-          submodules: true
-      - name: Prepare public build version
-        run: node app/scripts/stamp-build.cjs --prepare
-      - name: Build And Deploy
+          path: app/dist/gameengine
+          key: ${{ steps.keys.outputs.angular }}
+
+      - name: Set up Node 16 for Angular
+        if: steps.angular.outputs.cache-hit != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: app/.nvmrc
+
+      - name: Restore node_modules
+        id: modules
+        if: steps.angular.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: app/node_modules
+          key: ${{ steps.keys.outputs.modules }}
+
+      - name: Install Angular dependencies
+        if: steps.angular.outputs.cache-hit != 'true' && steps.modules.outputs.cache-hit != 'true'
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+
+      - name: Build Angular application
+        if: steps.angular.outputs.cache-hit != 'true'
+        working-directory: app
+        # ng build directly: version stamping happens below for cached and fresh builds alike.
+        run: npx ng build
+
+      - name: Save Angular build
+        if: steps.angular.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: app/dist/gameengine
+          key: ${{ steps.keys.outputs.angular }}
+
+      - name: Add current assets, config and build version
+        working-directory: app
+        run: |
+          rm -rf dist/gameengine/assets
+          cp -R src/assets dist/gameengine/assets
+          cp src/favicon.ico dist/gameengine/favicon.ico
+          cp src/app/staticwebapp.config.json dist/gameengine/staticwebapp.config.json
+          node scripts/stamp-build.cjs
+
+      # ---------- API (Static Web Apps managed functions: SignalR negotiate/messages) ----------
+      - name: Restore built API
+        id: api
+        if: inputs.full != true
+        uses: actions/cache/restore@v4
+        with:
+          path: api-build
+          key: ${{ steps.keys.outputs.api }}
+
+      - name: Set up Node 22 for the API
+        if: steps.api.outputs.cache-hit != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build API
+        if: steps.api.outputs.cache-hit != 'true'
+        working-directory: api
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          npm prune --omit=dev --no-audit --no-fund
+          mkdir -p ../api-build
+          cp -R host.json package.json package-lock.json dist node_modules ../api-build/
+
+      - name: Save built API
+        if: steps.api.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: api-build
+          key: ${{ steps.keys.outputs.api }}
+
+      - name: Summarize build
+        run: |
+          {
+            echo "### Incremental build"
+            echo "- Angular bundle: ${{ steps.angular.outputs.cache-hit == 'true' && 'reused from cache' || 'rebuilt' }}"
+            echo "- API: ${{ steps.api.outputs.cache-hit == 'true' && 'reused from cache' || 'rebuilt' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ---------- Deploy prebuilt output ----------
+      - name: Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_GENTLE_FIELD_09D23DA03 }}
           repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
           action: "upload"
-          ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
-          # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          app_location: "app" # App source code path
-          app_build_command: "npm run build" # Includes postbuild commit stamping
-          api_location: "api" # Api source code path - optional
-          output_location: "dist/gameengine" # Built app content directory - optional
-          ###### End of Repository/Build Configurations ######
+          app_location: "app/dist/gameengine"
+          api_location: "api-build"
+          output_location: ""
+          skip_app_build: true
+          skip_api_build: true
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
@@ -47,8 +163,37 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_GENTLE_FIELD_09D23DA03 }}
           action: "close"
 
+  # Decides whether the separate Highscores Function App needs a deployment.
+  changes:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    name: Detect API changes
+    outputs:
+      api: ${{ steps.diff.outputs.api }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compare with the previous push
+        id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            api=${{ inputs.full == true }}
+          elif [ -z "$BEFORE" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            api=true   # unknown previous state (new branch or force push): deploy to be safe
+          elif git diff --quiet "$BEFORE" "$GITHUB_SHA" -- api; then
+            api=false
+          else
+            api=true
+          fi
+          echo "api=$api" >> "$GITHUB_OUTPUT"
+          echo "Highscores Function App deployment needed: $api"
+
   deploy_highscores_api:
-    if: github.event_name == 'push'
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     name: Deploy Highscores API
     environment: carlintveld
