@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { multiply, anchorFromPose, position, moveOffset } = require("../src/assets/orbit/xr-math.js");
+const { multiply, anchorFromPose, position, moveOffset } = require("../public/assets/orbit/xr-math.js");
 const identity = () => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-5, `${a} differs from ${b}`);
 

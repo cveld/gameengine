@@ -2,12 +2,13 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const load = require("./helpers/load-typescript.cjs");
-const { BehaviorSubject, of } = require("../node_modules/rxjs");
-const protocol = load(path.join(__dirname, "../src/app/orbit/orbit-relay-protocol.ts"));
-const { OrbitTelemetryService } = load(path.join(__dirname, "../src/app/orbit/orbit-telemetry.service.ts"), {
-  "@angular/core": { Injectable: () => target => target },
-  "@microsoft/signalr": { HubConnectionState: { Connected: "Connected" } },
-  "../services/signalr/SignalrService": { SignalrService: class {} }
+const src = path.join(__dirname, "../src");
+const observable = load(path.join(src, "engine/observable.ts"));
+const protocol = load(path.join(src, "games/orbit/relay-protocol.ts"));
+const { OrbitTelemetry } = load(path.join(src, "games/orbit/telemetry.ts"), {
+  "@/engine/messages": { UserType: { undefined: "undefined" } },
+  "@/engine/observable": observable,
+  "@/engine/signalr": { signalr: () => { throw new Error("tests inject a client"); } }
 });
 const key = "12".repeat(16);
 const report = JSON.stringify({
@@ -18,18 +19,18 @@ const report = JSON.stringify({
   events: [], secretRoomGeometry: { matrix: [1, 2, 3] }
 });
 class SignalRStub {
-  state$ = new BehaviorSubject("Connected");
-  lastError$ = new BehaviorSubject(undefined);
+  state = new observable.Value("Connected");
+  lastError = new observable.Value(undefined);
   handlers = new Map();
   sent = [];
-  addHandler(type, handler) { this.handlers.set(type, handler); }
-  removeHandler(type) { this.handlers.delete(type); }
-  sendSignalrMessage(message) { this.sent.push(message); return of({}); }
+  get connected() { return this.state.value === "Connected"; }
+  on(type, handler) { this.handlers.set(type, handler); return () => this.handlers.delete(type); }
+  send(message) { this.sent.push(message); return Promise.resolve(); }
 }
 function client() {
   const signalr = new SignalRStub();
   let requested = 0;
-  const service = new OrbitTelemetryService({ get() { requested++; return signalr; } });
+  const service = new OrbitTelemetry(() => { requested++; return signalr; });
   return { signalr, service, requested: () => requested };
 }
 
@@ -72,13 +73,13 @@ test("Relay is opt-in, delivers encrypted snapshots, suppresses replays and deta
   await publisher.service.publish(report);
   const packet = publisher.signalr.sent[0];
   await monitor.signalr.handlers.get(protocol.ORBIT_REPORT_EVENT)(packet);
-  const received = monitor.service.report$.value;
+  const received = monitor.service.report.value;
   assert.equal(JSON.parse(received.report).attempt.handSample.validHands, 1);
   await monitor.signalr.handlers.get(protocol.ORBIT_REPORT_EVENT)(packet);
-  assert.equal(monitor.service.report$.value, received);
+  assert.equal(monitor.service.report.value, received);
   monitor.service.disconnect();
   assert.equal(monitor.signalr.handlers.size, 0);
-  assert.equal(monitor.signalr.state$.value, "Connected");
+  assert.equal(monitor.signalr.state.value, "Connected");
 });
 test("Disconnection during encryption drops the in-flight packet", async () => {
   const publisher = client();
@@ -96,5 +97,5 @@ test("Wrong-room and invalid broadcasts cannot populate a monitor", async () => 
   const receive = monitor.signalr.handlers.get(protocol.ORBIT_REPORT_EVENT);
   await receive({ gameid: "other-room", payload: { version: 1, data: "", iv: "" } });
   await receive({ gameid: monitor.service.codec.room, payload: { version: 1, data: "", iv: "" } });
-  assert.equal(monitor.service.report$.value, null);
+  assert.equal(monitor.service.report.value, null);
 });

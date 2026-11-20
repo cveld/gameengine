@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
-const Race = require(path.join(__dirname, "..", "src", "assets", "marble-race", "race.js"));
+const Race = require(path.join(__dirname, "..", "public", "assets", "marble-race", "race.js"));
 
 function settleAndStart(race) {
   for (let i = 0; i < 60; i++) Race.update(race, 1 / 60);

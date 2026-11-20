@@ -1,7 +1,7 @@
 # Project instructions
 
-Read `README.md` before working in this repository. For Angular app work, also
-read `app/README.md` and the relevant source files.
+Read `README.md` before working in this repository. For work on the site
+(Vite, TypeScript, Lit), also read `app/README.md` and the relevant source files.
 
 ## Lazy-loaded documentation
 

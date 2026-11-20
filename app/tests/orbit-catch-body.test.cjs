@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const Body = require("../src/assets/orbit-catch/body.js");
+const Body = require("../public/assets/orbit-catch/body.js");
 
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 function head(x, y, z, yaw = 0) {

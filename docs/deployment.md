@@ -17,25 +17,30 @@ never compiled; `ng build` only copies them.
 
 ## What runs now
 
-The build happens in the workflow itself; the Static Web Apps action only
-uploads prebuilt output (`skip_app_build`, `skip_api_build`).
+Since November 20, 2026 the site is a Vite + TypeScript + Lit app (Angular was
+removed), so the site build itself takes a few seconds and is no longer cached.
+The build happens in the workflow; the Static Web Apps action only uploads
+prebuilt output (`skip_app_build`, `skip_api_build`).
 
 | Part | Rebuilt when | Otherwise |
 |---|---|---|
-| Angular bundle (`ng build`, Node 16 from `app/.nvmrc`) | anything under `app/` changes except `src/assets`, `tests`, `scripts`, Markdown, spec files and `staticwebapp.config.json` | restored from the GitHub Actions cache |
-| `app/node_modules` | `app/package-lock.json` changes | restored from the cache (includes ngcc output) |
-| Game assets, favicon, `staticwebapp.config.json`, version stamp | every run (plain copy, then `scripts/stamp-build.cjs`) | — |
+| `app/node_modules` (Node 22 from `app/.nvmrc`) | `app/package-lock.json` changes | restored from the cache |
+| Site (`npm run build`: `vite build` to `app/dist`, then `scripts/stamp-build.cjs`) | every run, a few seconds | — |
 | Managed API for SignalR (`api-build/`: `dist`, production `node_modules`, `host.json`, `package*.json`) | anything under `api/` changes | restored from the cache |
 | Highscores Function App | `api/` differs between the push's `before` and `after` commits, or the previous commit is unknown (new branch, force push) | job skipped |
+| Type check and unit tests (`checks` job) | every run, in parallel with the deployment | — |
 | Whole workflow | — | pushes that only touch `docs/**`, `*.md` or `LICENSE` do not run |
 
-Cache keys are content hashes computed before anything is built, so a cache hit
-always matches the sources. The Angular build is cached without assets and
-without the version stamp; both are added on every run. Caches created on
-`main` are also used by pull requests.
+The `checks` job does not block the deployment: a red check shows up on the
+commit or pull request, but the site is already deployed. Browser tests
+(`npm run test:browser`) are run locally, not in CI.
 
-The run summary (Actions run page) states whether the Angular bundle and the
-API were reused or rebuilt.
+Cache keys are content hashes computed before anything is installed. Caches
+created on `main` are also used by pull requests; caches created in a pull
+request are not visible to `main`.
+
+The run summary (Actions run page) states whether the dependencies and the API
+were reused.
 
 ## Forcing a full deployment
 
@@ -47,8 +52,8 @@ changes would not retry.
 
 ## Adding things
 
-- New game under `app/src/assets/<game>`: assets only, no Angular rebuild.
-  The tile, route and wrapper are Angular changes and do trigger one rebuild.
-- If the Angular build starts depending on a new file outside `app/` (or on a
-  file excluded from the key above), add it to the `angular` key in the
-  "Compute cache keys" step, or bump the key's `v1` prefix to invalidate caches.
+- New static game: `app/public/assets/<game>/` plus a catalog entry and a
+  rewrite (see `app/README.md`). Every build includes it.
+- New dependency: change `app/package.json` and `app/package-lock.json`; the
+  next run installs and caches it. Bump the `v1` in the `modules` key to force a
+  fresh install.

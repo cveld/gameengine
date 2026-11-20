@@ -1,10 +1,10 @@
 name: Azure Static Web Apps CI/CD
 
-# Incremental pipeline: only rebuild what changed. See docs/deployment.md.
-# - Angular bundle: rebuilt only when Angular sources/config/lockfile change
-#   (cache key = hash of those files). Game assets are copied in every run.
+# Fast pipeline, see docs/deployment.md.
+# - Site: Vite + TypeScript, built in a few seconds; node_modules are cached by lockfile.
 # - API: rebuilt only when api/ changes (cache key = hash of api/).
 # - Highscores Function App: deployed only when api/ changed in the push.
+# - Type checks and unit tests run in a parallel job that does not delay deployment.
 # - Documentation-only pushes do not deploy.
 
 on:
@@ -43,59 +43,39 @@ jobs:
       - name: Compute cache keys
         id: keys
         run: |
-          echo "angular=angular-v1-node16-${{ hashFiles('app/**', '!app/src/assets/**', '!app/tests/**', '!app/scripts/**', '!app/**/*.md', '!app/**/*.spec.ts', '!app/src/app/staticwebapp.config.json', '!app/node_modules/**', '!app/dist/**') }}" >> "$GITHUB_OUTPUT"
-          echo "modules=node-modules-v1-node16-${{ hashFiles('app/package-lock.json') }}" >> "$GITHUB_OUTPUT"
+          echo "modules=site-modules-v1-node22-${{ hashFiles('app/package-lock.json') }}" >> "$GITHUB_OUTPUT"
           echo "api=swa-api-v1-node22-${{ hashFiles('api/**', '!api/node_modules/**', '!api/dist/**') }}" >> "$GITHUB_OUTPUT"
 
-      # ---------- Angular application ----------
-      - name: Restore Angular build
-        id: angular
-        if: inputs.full != true
-        uses: actions/cache/restore@v4
-        with:
-          path: app/dist/gameengine
-          key: ${{ steps.keys.outputs.angular }}
-
-      - name: Set up Node 16 for Angular
-        if: steps.angular.outputs.cache-hit != 'true'
+      # ---------- Site ----------
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version-file: app/.nvmrc
 
       - name: Restore node_modules
         id: modules
-        if: steps.angular.outputs.cache-hit != 'true'
-        uses: actions/cache@v4
+        if: inputs.full != true
+        uses: actions/cache/restore@v4
         with:
           path: app/node_modules
           key: ${{ steps.keys.outputs.modules }}
 
-      - name: Install Angular dependencies
-        if: steps.angular.outputs.cache-hit != 'true' && steps.modules.outputs.cache-hit != 'true'
+      - name: Install site dependencies
+        if: steps.modules.outputs.cache-hit != 'true'
         working-directory: app
         run: npm ci --no-audit --no-fund
 
-      - name: Build Angular application
-        if: steps.angular.outputs.cache-hit != 'true'
-        working-directory: app
-        # ng build directly: version stamping happens below for cached and fresh builds alike.
-        run: npx ng build
-
-      - name: Save Angular build
-        if: steps.angular.outputs.cache-hit != 'true'
+      - name: Save node_modules
+        if: steps.modules.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: app/dist/gameengine
-          key: ${{ steps.keys.outputs.angular }}
+          path: app/node_modules
+          key: ${{ steps.keys.outputs.modules }}
 
-      - name: Add current assets, config and build version
+      - name: Build site
         working-directory: app
-        run: |
-          rm -rf dist/gameengine/assets
-          cp -R src/assets dist/gameengine/assets
-          cp src/favicon.ico dist/gameengine/favicon.ico
-          cp src/app/staticwebapp.config.json dist/gameengine/staticwebapp.config.json
-          node scripts/stamp-build.cjs
+        # vite build, then the commit is stamped into every page's footer.
+        run: npm run build
 
       # ---------- API (Static Web Apps managed functions: SignalR negotiate/messages) ----------
       - name: Restore built API
@@ -105,12 +85,6 @@ jobs:
         with:
           path: api-build
           key: ${{ steps.keys.outputs.api }}
-
-      - name: Set up Node 22 for the API
-        if: steps.api.outputs.cache-hit != 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
 
       - name: Build API
         if: steps.api.outputs.cache-hit != 'true'
@@ -133,7 +107,7 @@ jobs:
         run: |
           {
             echo "### Incremental build"
-            echo "- Angular bundle: ${{ steps.angular.outputs.cache-hit == 'true' && 'reused from cache' || 'rebuilt' }}"
+            echo "- Site dependencies: ${{ steps.modules.outputs.cache-hit == 'true' && 'reused from cache' || 'installed' }}"
             echo "- API: ${{ steps.api.outputs.cache-hit == 'true' && 'reused from cache' || 'rebuilt' }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -145,11 +119,38 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_GENTLE_FIELD_09D23DA03 }}
           repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
           action: "upload"
-          app_location: "app/dist/gameengine"
+          app_location: "app/dist"
           api_location: "api-build"
           output_location: ""
           skip_app_build: true
           skip_api_build: true
+
+  # Type checks and unit tests; runs next to the deployment, not before it.
+  checks:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    name: Type check and unit tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: app/.nvmrc
+      - name: Restore node_modules
+        id: modules
+        uses: actions/cache/restore@v4
+        with:
+          path: app/node_modules
+          key: site-modules-v1-node22-${{ hashFiles('app/package-lock.json') }}
+      - name: Install site dependencies
+        if: steps.modules.outputs.cache-hit != 'true'
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+      - name: Type check
+        working-directory: app
+        run: npm run typecheck
+      - name: Unit tests
+        working-directory: app
+        run: npm test
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'

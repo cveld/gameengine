@@ -6,7 +6,7 @@ const path = require("node:path");
 const installMockXR = require("./helpers/mock-xr.cjs");
 const installMockAudio = require("./helpers/mock-audio.cjs");
 const { chromium } = require(process.env.ORBIT_PLAYWRIGHT_MODULE || "playwright");
-const root = path.resolve(process.env.ORBIT_TEST_ROOT || path.join(__dirname, "../src"));
+const root = path.resolve(process.env.ORBIT_TEST_ROOT || path.join(__dirname, "../public"));
 let browser, server, origin;
 
 before(async () => {

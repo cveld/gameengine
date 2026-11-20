@@ -1,0 +1,84 @@
+.orbit-frame {
+  border-radius: 12px;
+}
+.wireless-panel {
+  font-size: 14px;
+}
+.wireless-panel summary {
+  color: #8d9ab7;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+.wireless-panel .wireless-body {
+  box-sizing: border-box;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid #3e4d70;
+  border-radius: 8px;
+  background: #141d31;
+  color: #e4e9f4;
+}
+.wireless-panel input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  font-family: monospace;
+}
+.wireless-panel label {
+  display: block;
+  margin: 8px 0;
+}
+.wireless-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.wireless-actions button,
+.wireless-actions a {
+  min-height: 44px;
+  padding: 8px 12px;
+}
+@media (min-width: 768px) {
+  .orbit-frame {
+    border-radius: 16px;
+  }
+}
+/* On wide viewports the page height is fixed, so the panel floats over the
+   bottom left of the game (opening upwards) instead of adding height. */
+@media (min-width: 900px) {
+  .wireless-panel {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    z-index: 10;
+  }
+  .wireless-panel summary {
+    border: 1px solid #3e4d70;
+    border-radius: 8px;
+    background: #141d31e6;
+  }
+  .wireless-panel .wireless-body {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    width: 520px;
+    max-height: calc(100vh - 100px);
+    margin-bottom: 8px;
+    overflow: auto;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* Diagnostics console. */
+.diagnostics { max-width: 920px; margin: auto; padding: 20px 16px; }
+.diagnostics label { display: block; margin: 12px 0; }
+.diagnostics input, .diagnostics textarea { display: block; width: 100%; box-sizing: border-box; font: 13px/1.5 monospace; padding: 10px; }
+.diagnostics input, .diagnostics button, .diagnostics a { min-height: 44px; }
+.diagnostics .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.diagnostics button { padding: 8px 14px; }
+.diagnostics textarea { overflow-wrap: anywhere; }

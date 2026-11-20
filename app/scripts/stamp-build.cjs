@@ -29,15 +29,37 @@ function stampHTML(html, version) {
   return html.replace(marker, `<span data-build-version title="${version.commit}${suffix}">Commit: ${short}${suffix}</span>`);
 }
 
+// Site pages: every .html in the output outside assets/ (the static games),
+// plus Orbit's own page. index.html and Orbit must exist.
+function pageFiles(outputRoot) {
+  const found = [];
+  const walk = dir => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (path.relative(outputRoot, full) !== "assets") walk(full);
+      } else if (entry.name.endsWith(".html")) {
+        found.push(full);
+      }
+    }
+  };
+  walk(outputRoot);
+  const index = path.join(outputRoot, "index.html");
+  const orbit = path.join(outputRoot, "assets/orbit/index.html");
+  return [index, ...found.filter(file => file !== index).sort(), orbit];
+}
+
 function stampBuild(outputRoot, version) {
-  const files = ["index.html", "assets/orbit/index.html"].map(file => path.join(outputRoot, file));
-  // Validate both files before writing either; missing labels must fail the build.
+  const files = pageFiles(outputRoot);
+  // Validate every file before writing any; missing labels must fail the build.
   const stamped = files.map(file => stampHTML(fs.readFileSync(file, "utf8"), version));
-  // Angular production bundles already have content hashes. Orbit's static
+  // Bundled page code already has content hashes. Orbit's static
   // scripts/styles need the build commit in their URLs to avoid stale code.
-  stamped[1] = stamped[1].replace(/(\s(?:src|href))="([\w./-]+\.(?:js|css))(?:\?v=[a-f0-9]+)?"/g,
+  const last = stamped.length - 1;
+  stamped[last] = stamped[last].replace(/(\s(?:src|href))="([\w./-]+\.(?:js|css))(?:\?v=[a-f0-9]+)?"/g,
     `$1="$2?v=${version.commit}"`);
   files.forEach((file, index) => fs.writeFileSync(file, stamped[index]));
+  return files;
 }
 
 if (require.main === module) {
@@ -46,9 +68,9 @@ if (require.main === module) {
   if (process.argv.includes("--prepare")) {
     fs.writeFileSync(path.join(appRoot, ".build-commit.json"), JSON.stringify(version) + "\n");
   } else {
-    stampBuild(path.join(appRoot, "dist/gameengine"), version);
-    console.log(`Stamped website and Orbit: ${version.commit}${version.dirty ? " (local changes)" : ""}`);
+    const files = stampBuild(path.join(appRoot, "dist"), version);
+    console.log(`Stamped ${files.length} pages: ${version.commit}${version.dirty ? " (local changes)" : ""}`);
   }
 }
 
-module.exports = { validCommit, resolveVersion, stampHTML, stampBuild };
+module.exports = { validCommit, resolveVersion, stampHTML, stampBuild, pageFiles };

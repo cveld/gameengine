@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { surface, spikeExtension, buildMesh, updateMesh } = require("../src/assets/orbit/geometry.js");
+const { surface, spikeExtension, buildMesh, updateMesh } = require("../public/assets/orbit/geometry.js");
 const tau = Math.PI * 2;
 
 function near(a, b, epsilon = 1e-5) {

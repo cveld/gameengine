@@ -3,10 +3,11 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const rewrite = require("./helpers/swa-routes.cjs");
 const WebSocketServer = require("../node_modules/ws").Server;
 const { chromium } = require(process.env.ORBIT_PLAYWRIGHT_MODULE || "playwright");
 const installMockXR = require("./helpers/mock-xr.cjs");
-const root = path.resolve(process.env.ORBIT_TEST_ROOT || path.join(__dirname, "../dist/gameengine"));
+const root = path.resolve(process.env.ORBIT_TEST_ROOT || path.join(__dirname, "../dist"));
 
 test("Wireless XR reports cross real SignalR clients without USB, plaintext poses or unsolicited sharing", async () => {
   const packets = [];
@@ -31,7 +32,7 @@ test("Wireless XR reports cross real SignalR clients without USB, plaintext pose
         json({});
       }); return;
     }
-    let file = path.resolve(root, "." + url.pathname);
+    let file = path.resolve(root, "." + rewrite(url.pathname));
     if (!file.startsWith(root + path.sep) && file !== root) { res.writeHead(403).end(); return; }
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) file = path.join(root, "index.html");
     res.setHeader("Content-Type", ({ ".html": "text/html", ".css": "text/css", ".js": "text/javascript" })[path.extname(file)] || "text/plain");
@@ -53,7 +54,7 @@ test("Wireless XR reports cross real SignalR clients without USB, plaintext pose
     const publisher = await context.newPage(), monitor = await context.newPage(), errors = [];
     for (const page of [publisher, monitor]) page.on("pageerror", error => errors.push(error.message));
     await publisher.goto(origin + "/orbit/classic");
-    const frame = publisher.frameLocator("app-orbit iframe");
+    const frame = publisher.frameLocator("orbit-classic iframe");
     await frame.locator("#scene").waitFor();
     assert.equal(packets.length, 0);
     await monitor.goto(origin + "/orbit/diagnostics#" + key);
@@ -72,7 +73,7 @@ test("Wireless XR reports cross real SignalR clients without USB, plaintext pose
     await (await reveal(frame.locator("#ar-minimal-hands"))).check();
     await (await reveal(frame.locator("#shortcuts form button"))).click();
     await frame.locator("#enter-ar").click();
-    await publisher.waitForFunction(() => document.querySelector("app-orbit iframe").contentDocument.documentElement.classList.contains("ar-active"));
+    await publisher.waitForFunction(() => document.querySelector("orbit-classic iframe").contentDocument.documentElement.classList.contains("ar-active"));
     await frame.locator("#scene").evaluate(() => {
       const device = mockXR.device;
       device.inputSources = [{ handedness: "right", hand: new Map([

@@ -1,35 +1,57 @@
-# Gameengine
+# Gameengine site
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 12.1.4.
+A multi-page site built with [Vite](https://vitejs.dev/), TypeScript and
+[Lit](https://lit.dev/). It replaced the Angular 12 app in November 2026.
 
-## Development server
+## Layout
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.
+| Path | Contents |
+|---|---|
+| `pages/**/index.html` | One HTML entry per page (home, `memory/`, `simon/`, `coop/`, `engine/`, `play/`, `orbit/`, `orbit/classic/`, `orbit/diagnostics/`). Each loads one module from `src/pages/`. |
+| `src/pages/*.ts` | Page entry points. |
+| `src/engine/` | Shared code: `catalog.ts` (the games and tiles), `signalr.ts` (one SignalR connection per page, messages via `/api/messages`), `presence.ts` (who is online plus a results feed), `history.ts` and `profile.ts` (localStorage), `observable.ts` (`Value`/`Emitter`), `element.ts` (`PageElement`: Lit in the light DOM so Bootstrap applies), `join-form.ts`. |
+| `src/games/<game>/` | Games written in TypeScript: `memory`, `simon`, `coop` (Tandem Ruimteschip), `cardgame` (the card-game engine with game and player tabs), `orbit` (Classic Orbit page, wireless diagnostics relay). |
+| `public/assets/<game>/` | Static games served as-is (Orbit, Orbit Catch, Marble Race, Maze, Maze Rooms, Flappy Muis) and the card images. URLs stay `/assets/<game>/…`. |
+| `public/staticwebapp.config.json` | URL rewrites for Azure Static Web Apps; the Vite dev server and the browser tests apply the same rewrites. |
+| `scripts/stamp-build.cjs` | Stamps the commit into every page's footer and into Orbit (with cache-busting query strings). |
+| `tests/` | Node tests (`npm test`) and browser tests (`npm run test:browser`). |
 
-## Code scaffolding
+Pages:
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+- `/` home: tiles from `src/engine/catalog.ts`.
+- `/memory`, `/simon`, `/coop`, `/engine` (with `/engine/create`, `/engine/debug`, `/engine/tabs/<n>` handled in the page).
+- `/maze`, `/maze-rooms`, `/flappy-muis`, `/marble-race`, `/orbit/catch`: `pages/play/` shows the static game from the catalog in a frame. The frame may send `<prefix>:back` (fixed target from the catalog) and, for Marble Race, `marble:immersive`.
+- `/orbit` chooser, `/orbit/classic` (frame plus wireless diagnostics), `/orbit/diagnostics` (PC console).
 
-## Build
+The card-game engine keeps its tabs in `sessionStorage`, so they survive a reload.
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+## Adding a game
 
-Use `npm run build` for publishable builds: its `postbuild` hook stamps the
-checkout's commit into the website footer and Orbit footer. The full hash is
-available as a tooltip; local pending changes are labeled explicitly. Direct
-`ng build` skips this hook, so follow it with `node scripts/stamp-build.cjs`.
-Source/dev-server pages show `Commit: development`, not a fabricated commit.
-CI prepares ignored `.build-commit.json` metadata before the hosted build so
-stamping still works when the build container does not retain `.git`.
+- Static game: put it in `public/assets/<game>/`, add an entry with `embed` to
+  `src/engine/catalog.ts` and a rewrite of its route to `/play/index.html` in
+  `public/staticwebapp.config.json`.
+- TypeScript game: add `src/games/<game>/`, a page in `pages/<game>/index.html`
+  plus `src/pages/<game>.ts`, a catalog entry and a rewrite.
 
-## Running unit tests
+## Commands
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
+Run from `app/` with Node 22 (`.nvmrc`):
 
-## Running end-to-end tests
+```sh
+npm ci
+npm run dev           # http://localhost:5173, /api proxied to the Functions host on :7071
+npm run build         # dist/, with the commit stamped into the footers
+npm run typecheck
+npm test              # unit tests (Node only)
+npm run build && npm run test:browser   # Playwright tests against dist/ and public/
+```
 
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
+`npm run test:browser` uses an installed Playwright (`require("playwright")`, or
+`ORBIT_PLAYWRIGHT_MODULE`). `tests/site.test.cjs` serves `dist/` with a local
+SignalR stand-in and checks navigation, the embedded games, Memory, Simon, Co-op
+and the card-game engine across browser pages. Two tests in `orbit-xr.test.cjs`
+(VR/AR independence, Exit VR during capability changes) already failed on the
+Angular version and still do.
 
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+Source/dev-server pages show `Commit: development`; only `npm run build`
+stamps a commit (`(local changes)` when the checkout is dirty).
