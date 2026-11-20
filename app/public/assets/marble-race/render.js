@@ -185,7 +185,7 @@
       pillar: null
     },
     lava: {
-      clear: [0.14, 0.05, 0.035], fog: [0.2, 0.07, 0.04], fogRange: [25, 230],
+      clear: [0.1, 0.04, 0.03], fog: [0.13, 0.05, 0.035], fogRange: [14, 140],
       light: [-0.35, 0.75, 0.25], lightColor: [0.95, 0.62, 0.42],
       ambSky: [0.16, 0.12, 0.16], ambGround: [1.0, 0.42, 0.14], ambStrength: 0.62,
       envLow: [1.0, 0.4, 0.1], envHigh: [0.1, 0.07, 0.09],
@@ -238,8 +238,10 @@ uniform vec3 uEnvHigh;
 uniform float uTime;
 void main() {
   if (uKind > 5.5 && uKind < 6.5) {
-    // Lava: slowly flowing hot rivers between dark crust, self-lit.
-    vec2 p = vWorld.xz * 0.07;
+    // Lava: hot streams between dark crust, self-lit, flowing downhill
+    // (the flow direction is stored in the mesh's normal attribute).
+    vec2 flow = vObjNormal.xz;
+    vec2 p = vWorld.xz * 0.11 - flow * uTime * 0.32;
     float t = uTime * 0.12;
     float n = sin(p.x * 3.1 + sin(p.y * 2.3 + t) * 1.8 + t) * sin(p.y * 2.7 + sin(p.x * 1.9 - t) * 1.6 - t * 0.7);
     n += 0.35 * sin(p.x * 9.0 + p.y * 7.0 + t * 3.0);
@@ -283,6 +285,13 @@ void main() {
     vec2 t = floor(vWorld.xz / 6.0);
     float c = mod(t.x + t.y, 2.0);
     base = mix(uColor, uColor2, c * 0.5);
+  } else if (uKind > 7.5 && uKind < 8.5) {
+    // Cave walls and ceiling: mottled basalt.
+    vec3 q = vWorld * 0.35;
+    float m = sin(q.x * 1.7 + sin(q.z * 1.3 + q.y)) * sin(q.z * 1.9 + sin(q.x * 1.1 - q.y * 0.7)) * 0.5 + 0.5;
+    float fine = sin(vWorld.x * 3.1 + vWorld.y * 2.3) * sin(vWorld.z * 2.7 - vWorld.y * 1.9) * 0.5 + 0.5;
+    base = uColor * (0.6 + 0.35 * m + 0.15 * fine);
+    gloss = 0.02;
   } else if (uKind > 6.5 && uKind < 7.5) {
     // Rock: mottled stone.
     vec3 q = vObjPos * 3.0;
@@ -399,7 +408,7 @@ void main() {
 
     let lost = false;
     canvas.addEventListener("webglcontextlost", e => { e.preventDefault(); lost = true; });
-    canvas.addEventListener("webglcontextrestored", () => { lost = false; init(); });
+    canvas.addEventListener("webglcontextrestored", () => { lost = false; init(); scenery = null; });
 
     let current = null;
     function bindMesh(mesh) {
@@ -434,6 +443,69 @@ void main() {
       draw(meshes.sphere, IDENTITY3, [r, r, r], b, color, opts);
     }
 
+    // The lava world's cave: a lava river and a rock ceiling, both heightfields that
+    // follow the track down, closing into walls further away from it.
+    function buildCave(course, rnd) {
+      const b = course.bounds;
+      const margin = 40;
+      const x0 = b.min[0] - margin, x1 = b.max[0] + margin, z0 = b.min[2] - margin, z1 = b.max[2] + margin;
+      let step = lowPower ? 3.2 : 2.2;
+      while (((x1 - x0) / step + 1) * ((z1 - z0) / step + 1) > 60000) step *= 1.2;
+      const nx = Math.ceil((x1 - x0) / step) + 1, nz = Math.ceil((z1 - z0) / step) + 1;
+      const lavaY = new Float32Array(nx * nz), ceilY = new Float32Array(nx * nz), flow = new Float32Array(nx * nz * 2);
+      const noise = (x, z) => 0.9 * Math.sin(x * 0.31 + z * 0.17) * Math.cos(z * 0.27 - x * 0.11) + 0.45 * Math.sin(x * 0.93 + z * 1.27);
+      for (let j = 0; j < nz; j++) {
+        for (let i = 0; i < nx; i++) {
+          const x = x0 + i * step, z = z0 + j * step, k = j * nx + i;
+          const f = course.caveField(x, z);
+          lavaY[k] = course.lavaHeight(x, z);
+          // Rough rock away from the track; never lower over it.
+          ceilY[k] = course.ceilingHeight(x, z) + (f.d > 5 ? noise(x, z) * Math.min(1, (f.d - 5) / 6) : 0);
+          flow[k * 2] = f.fx; flow[k * 2 + 1] = f.fz;
+        }
+      }
+      const grid = (heights, normalOf) => {
+        const p = [], n = [], idx = [];
+        for (let j = 0; j < nz; j++) {
+          for (let i = 0; i < nx; i++) {
+            const k = j * nx + i;
+            p.push(x0 + i * step, heights[k], z0 + j * step);
+            n.push(...normalOf(i, j, k));
+          }
+        }
+        for (let j = 0; j + 1 < nz; j++) {
+          for (let i = 0; i + 1 < nx; i++) {
+            const a = j * nx + i, c = a + nx;
+            idx.push(a, c, a + 1, a + 1, c, c + 1);
+          }
+        }
+        return upload({ p, n, idx });
+      };
+      const at = (arr, i, j) => arr[Math.min(nz - 1, Math.max(0, j)) * nx + Math.min(nx - 1, Math.max(0, i))];
+      const ceiling = grid(ceilY, (i, j) => {
+        const dx = (at(ceilY, i + 1, j) - at(ceilY, i - 1, j)) / (2 * step);
+        const dz = (at(ceilY, i, j + 1) - at(ceilY, i, j - 1)) / (2 * step);
+        const l = Math.hypot(dx, 1, dz);
+        return [dx / l, -1 / l, dz / l]; // facing down, into the cave
+      });
+      const river = grid(lavaY, (i, j, k) => [flow[k * 2], 0, flow[k * 2 + 1]]);
+
+      // Stalactites from the ceiling and rock spires from the lava, clear of the track.
+      const stalactites = [], spires = [];
+      for (let tries = 0; tries < 3000 && (stalactites.length < (lowPower ? 40 : 110) || spires.length < (lowPower ? 20 : 50)); tries++) {
+        const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0);
+        const f = course.caveField(x, z);
+        if (f.d > 4.5 && f.d < 24 && stalactites.length < (lowPower ? 40 : 110)) {
+          const h = 1.2 + rnd() * 2.6;
+          stalactites.push({ x, z, h, r: h * (0.16 + rnd() * 0.1), base: course.ceilingHeight(x, z) + 0.6, shade: 0.7 + rnd() * 0.5 });
+        } else if (f.d > 7 && f.d < 26 && spires.length < (lowPower ? 20 : 50)) {
+          const h = 1.5 + rnd() * 4;
+          spires.push({ x, z, h, r: h * (0.2 + rnd() * 0.1), base: course.lavaHeight(x, z) - 0.4, shade: 0.7 + rnd() * 0.5 });
+        }
+      }
+      return { ceiling, river, stalactites, spires, meshes: [ceiling, river] };
+    }
+
     let scenery = null;
     function prepareScenery(course) {
       const rnd = root.MarbleRace.createRng(course.seed * 31 + 7);
@@ -441,18 +513,9 @@ void main() {
       const spikes = [];
       const b = course.bounds;
       const pad = 30;
+      let cave = null;
       if (course.world === "lava") {
-        // Stalagmites rising from the lava, kept clear of the track so they never block the view.
-        const clear = (x, z) => course.path.every(p => Math.hypot(p[0] - x, p[2] - z) > 9);
-        for (let i = 0, tries = 0; i < (lowPower ? 35 : 80) && tries < 2000; tries++) {
-          const x = b.min[0] - pad + rnd() * (b.max[0] - b.min[0] + pad * 2);
-          const z = b.min[2] - pad + rnd() * (b.max[2] - b.min[2] + pad * 2);
-          const h = 3 + rnd() * 8;
-          const r = h * (0.18 + rnd() * 0.08);
-          if (!clear(x, z)) continue;
-          spikes.push({ x, z, h, r, up: true, base: course.groundY, shade: 0.7 + rnd() * 0.5 });
-          i++;
-        }
+        cave = buildCave(course, rnd);
       } else {
         for (let i = 0; i < (lowPower ? 40 : 90); i++) {
           const x = b.min[0] - pad + rnd() * (b.max[0] - b.min[0] + pad * 2);
@@ -468,7 +531,8 @@ void main() {
         const a = rnd() * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
         rockTurns.set(solid, [c, 0, -s, 0, 1, 0, s, 0, c]);
       }
-      scenery = { course, trees, spikes, rockTurns, theme: THEMES[course.world] || THEMES.meadow };
+      if (scenery && scenery.cave) for (const mesh of scenery.cave.meshes) { gl.deleteBuffer(mesh.vb); gl.deleteBuffer(mesh.ib); }
+      scenery = { course, trees, spikes, rockTurns, cave, theme: THEMES[course.world] || THEMES.meadow };
     }
 
     function render(scene) {
@@ -525,12 +589,17 @@ void main() {
       // Ground, trees and pillars.
       const gy = course.groundY;
       const cx = (course.bounds.min[0] + course.bounds.max[0]) / 2, cz = (course.bounds.min[2] + course.bounds.max[2]) / 2;
-      if (course.world === "lava") {
-        draw(meshes.cube, IDENTITY3, [600, 0.5, 600], [cx, gy - 0.5, cz], [1, 0.4, 0.1], { kind: 6 });
+      if (scenery.cave) {
+        const cave = scenery.cave;
+        const ONE = [1, 1, 1], ZERO = [0, 0, 0];
+        draw(cave.river, IDENTITY3, ONE, ZERO, [1, 0.4, 0.1], { kind: 6 });
+        draw(cave.ceiling, IDENTITY3, ONE, ZERO, [0.3, 0.25, 0.24], { kind: 8 });
         const FLIP = [1, 0, 0, 0, -1, 0, 0, 0, 1];
-        for (const k of scenery.spikes) {
-          const color = [0.2 * k.shade, 0.16 * k.shade, 0.15 * k.shade];
-          draw(meshes.cone, k.up ? IDENTITY3 : FLIP, [k.r, k.h / 2, k.r], [k.x, k.base + (k.up ? k.h / 2 : -k.h / 2), k.z], color);
+        for (const k of cave.stalactites) {
+          draw(meshes.cone, FLIP, [k.r, k.h / 2, k.r], [k.x, k.base - k.h / 2, k.z], [0.26 * k.shade, 0.21 * k.shade, 0.2 * k.shade], { kind: 7 });
+        }
+        for (const k of cave.spires) {
+          draw(meshes.cone, IDENTITY3, [k.r, k.h / 2, k.r], [k.x, k.base + k.h / 2, k.z], [0.2 * k.shade, 0.16 * k.shade, 0.15 * k.shade], { kind: 7 });
         }
       } else {
         draw(meshes.cube, IDENTITY3, [600, 0.5, 600], [cx, gy - 0.5, cz], [0.42, 0.66, 0.3], { kind: 5, color2: [0.52, 0.76, 0.36] });
@@ -542,8 +611,10 @@ void main() {
       for (const d of course.deco) {
         if (d.type === "pillar") {
           const top = d.c[1] - 0.4;
-          const half = (top - gy) / 2;
-          if (half > 0) draw(meshes.cylinder, IDENTITY3, [0.45, half, 0.45], [d.c[0], gy + half, d.c[2]], theme.pillar || d.color);
+          const bottom = course.lavaHeight ? course.lavaHeight(d.c[0], d.c[2]) - 0.5 : gy;
+          const half = (top - bottom) / 2;
+          const r = d.r || 0.45;
+          if (half > 0) draw(meshes.cylinder, IDENTITY3, [r, half, r], [d.c[0], bottom + half, d.c[2]], theme.pillar || d.color);
         } else {
           draw(meshes.cube, d.m, d.h, d.c, d.color, { kind: d.kind || 0 });
         }
@@ -569,6 +640,12 @@ void main() {
         draw(meshes.sphere, quatToMat3(m.q), [0.3, 0.3, 0.3], m.p, m.color, { kind: 3, color2: m.accent, emissive: m.highlight ? 0.12 : 0 });
       }
 
+      // Falling rocks.
+      const rocks = scene.rocks || [];
+      for (const rock of rocks) {
+        draw(meshes.rock, quatToMat3(rock.q), [rock.r * 1.05, rock.r * 1.05, rock.r * 1.05], rock.p, [0.42, 0.35, 0.32], { kind: 7 });
+      }
+
       // Blob shadows.
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -584,6 +661,14 @@ void main() {
         const size = 0.3 * (1 + height * 0.15);
         const nrm = hit.normal;
         draw(meshes.disc, basisFromY(nrm), [size, 1, size], [m.p[0], hit.y + 0.01, m.p[2]], [0, 0, 0], { kind: 4, alpha });
+      }
+      // Rock shadows grow on the track while a rock falls: a warning.
+      for (const rock of rocks) {
+        const hit = root.MarbleRace.floorBelow(course, rock.p, 14);
+        if (!hit) continue;
+        const alpha = Math.max(0.12, 0.6 - hit.distance * 0.05);
+        const size = rock.r * (1.1 + hit.distance * 0.12);
+        draw(meshes.disc, basisFromY(hit.normal), [size, 1, size], [rock.p[0], hit.y + 0.012, rock.p[2]], [0, 0, 0], { kind: 4, alpha });
       }
       gl.disable(gl.POLYGON_OFFSET_FILL);
       gl.depthMask(true);

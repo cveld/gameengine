@@ -61,6 +61,23 @@
       osc.stop(start + duration + 0.05);
     }
 
+    function noiseBurst(seconds, filterType, frequency, volume) {
+      const now = ctx.currentTime;
+      const length = Math.floor(ctx.sampleRate * seconds);
+      const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 1.5);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = filterType;
+      filter.frequency.value = frequency;
+      const gain = ctx.createGain();
+      gain.gain.value = volume;
+      source.connect(filter).connect(gain).connect(master);
+      source.start(now);
+    }
+
     return {
       unlock: ensure,
       setEnabled(on) {
@@ -127,6 +144,16 @@
         noise.connect(filter).connect(gain).connect(master);
         noise.start(now);
         tone(90, now, 0.4, "sine", 0.12);
+      },
+      // A falling rock: low rumble from the cave ceiling.
+      rockfall() {
+        if (!ctx || !enabled) return;
+        noiseBurst(0.9, "lowpass", 260, 0.22);
+      },
+      // A rock breaking up: short gritty noise.
+      crumble() {
+        if (!ctx || !enabled) return;
+        noiseBurst(0.35, "bandpass", 900, 0.1);
       },
       ding() {
         if (!ctx) return;

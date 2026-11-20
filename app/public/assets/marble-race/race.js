@@ -15,6 +15,9 @@
   const AIR_DRAG = 0.04;    // fraction of speed lost per second
   const FINISH_GRACE = 30;  // seconds after the winner before the race closes
   const RACE_LIMIT = 240;   // hard limit in seconds
+  const LAVA_DEPTH = 2.6;   // lava river surface below the track (lava world)
+  const CAVE_HEIGHT = 9;    // cave ceiling above the track (lava world)
+  const MAX_ROCKS = 6;      // falling rocks in the air or rolling at once
 
   const MARBLES = Object.freeze([
     { name: "Ruby", color: [0.86, 0.12, 0.18], accent: [1.0, 0.82, 0.85] },
@@ -447,6 +450,19 @@
       }
     };
 
+    // Lanes in the cave are stone bridges: posts on the parapets and piers
+    // down into the lava (drawn only; the renderer ends piers at the lava).
+    function bridgeDecor(F, Ls, type) {
+      const stone = [0.36, 0.31, 0.29];
+      for (let w = 1.0; w < Ls - 0.5; w += 2.3) {
+        for (const side of [-1, 1]) {
+          deco.push({ type: "box", c: F.at(side * (W / 2 + WT / 2), WALL_H + 0.16, w), m: basis(F.r, F.n, F.t), h: [WT / 2 + 0.04, 0.16, 0.14], color: stone });
+        }
+      }
+      if (type === "drop") return; // its lower deck would cut through piers
+      for (let w = 3; w < Ls - 1.5; w += 5.5) deco.push({ type: "pillar", c: F.at(0, -FT * 0.5, w), r: 0.32, color: stone });
+    }
+
     // Corner pad: turns the heading by 90 degrees towards turn (+1 right, -1 left).
     function corner(E, f, turn, colors) {
       const f2 = scale([-f[2], 0, f[0]], turn);
@@ -490,6 +506,7 @@
       const pathStart = path.length;
       addPath(lift(F.at(0, 0, type === "start" ? 0.5 : 0), R));
       const result = modules[type](F, colors, type === "boulders" ? extra : random);
+      if (lava) bridgeDecor(F, result.Ls, type);
       if (lava && type !== "start" && type !== "boulders") {
         // A boulder where each lane begins, before its obstacles, on a random side.
         rock(F, (extra() < 0.5 ? -1 : 1) * 0.92, 1.1, 0.34);
@@ -532,7 +549,59 @@
     };
     course.finishProgress = projectProgress(course, lift(finish.point, R)).progress;
     course.groundY = bounds.min[1] - 6;
+    if (lava) {
+      course.caveField = (x, z) => caveField(course, x, z);
+      course.lavaHeight = (x, z) => caveField(course, x, z).h - LAVA_DEPTH;
+      course.ceilingHeight = (x, z) => {
+        const f = caveField(course, x, z);
+        const t = smoothstep(13, 30, f.d);
+        return f.h + CAVE_HEIGHT * (1 - t) - (LAVA_DEPTH + 0.6) * t;
+      };
+    }
     return course;
+  }
+
+  function smoothstep(a, b, x) {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  }
+
+  // Lava world: smoothed height of the track near (x, z), the horizontal
+  // distance to its centre line and the downhill direction. The lava river and
+  // the cave ceiling follow the track down.
+  function caveField(course, x, z) {
+    const path = course.path;
+    const hits = [];
+    let dmin = Infinity;
+    for (let i = 0; i + 1 < path.length; i++) {
+      const a = path[i], b = path[i + 1];
+      const abx = b[0] - a[0], abz = b[2] - a[2];
+      const l2 = abx * abx + abz * abz;
+      const t = l2 > 1e-9 ? Math.max(0, Math.min(1, ((x - a[0]) * abx + (z - a[2]) * abz) / l2)) : 0;
+      const qx = a[0] + abx * t, qz = a[2] + abz * t;
+      const d = Math.hypot(x - qx, z - qz);
+      const l = Math.sqrt(l2) || 1;
+      hits.push({ d, h: a[1] + (b[1] - a[1]) * t - R, fx: abx / l, fz: abz / l });
+      if (d < dmin) dmin = d;
+    }
+    let ws = 0, h = 0, fx = 0, fz = 0;
+    for (const hit of hits) {
+      const w = Math.exp(-(hit.d - dmin) / 2);
+      ws += w; h += hit.h * w; fx += hit.fx * w; fz += hit.fz * w;
+    }
+    const fl = Math.hypot(fx, fz) || 1;
+    return { h: h / ws, d: dmin, fx: fx / fl, fz: fz / fl };
+  }
+
+  // Point and horizontal heading at a distance along the centre line.
+  function pointAt(course, progress) {
+    const { path, cum } = course;
+    let i = 0;
+    while (i + 2 < path.length && cum[i + 1] < progress) i++;
+    const a = path[i], b = path[i + 1];
+    const t = Math.max(0, Math.min(1, (progress - cum[i]) / ((cum[i + 1] - cum[i]) || 1)));
+    const dx = b[0] - a[0], dz = b[2] - a[2], l = Math.hypot(dx, dz) || 1;
+    return { p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t], dir: [dx / l, 0, dz / l] };
   }
 
   // Distance along the course centre line closest to p, searching around hint.
@@ -684,6 +753,8 @@
       winnerTime: null,
       leader: null,
       events: [],
+      rocks: [],
+      nextRockAt: 3,
       random
     };
     for (const m of marbles) updateProgress(race, m);
@@ -785,6 +856,7 @@
       }
       integrateRotation(m, dt);
     }
+    if (race.rocks.length) stepRocks(race, dt);
     // Marble-marble collisions.
     for (let i = 0; i < marbles.length; i++) {
       const a = marbles[i];
@@ -809,6 +881,110 @@
         }
       }
     }
+  }
+
+  // Falling rocks: spheres that drop from the cave ceiling, bounce, roll down
+  // the track and push marbles out of the way (they are much heavier).
+  function stepRocks(race, dt) {
+    const { course, marbles } = race;
+    const solids = course.solids;
+    for (const rock of race.rocks) {
+      rock.v[1] -= G * dt;
+      const sp = len(rock.v);
+      if (sp > 20) rock.v = scale(rock.v, 20 / sp);
+      rock.p = madd(rock.p, rock.v, dt);
+      let groundNormal = null;
+      for (let k = 0; k < solids.length; k++) {
+        const s = solids[k];
+        const hit = collide(s, rock.p, rock.r);
+        if (!hit) continue;
+        rock.p = madd(rock.p, hit.n, hit.depth);
+        const sv = surfaceVelocity(s, rock.p, dt);
+        const rel = sub(rock.v, sv);
+        const vn = dot(rel, hit.n);
+        if (vn < 0) {
+          const e = -vn < 0.8 ? 0 : Math.min(0.3, s.e);
+          rock.v = add(madd(rel, hit.n, -(1 + e) * vn), sv);
+          if (!rock.landed && hit.n[1] > 0.5) {
+            rock.landed = true;
+            race.events.push({ type: "rockland", speed: -vn, p: rock.p.slice() });
+          }
+        }
+        if (hit.n[1] > 0.5) {
+          groundNormal = hit.n;
+          const tang = madd(rock.v, hit.n, -dot(rock.v, hit.n));
+          const ts = len(tang);
+          if (ts > 1e-4) rock.v = madd(rock.v, tang, -Math.min(ts, 0.6 * dt) / ts);
+        }
+      }
+      if (groundNormal) rock.spin = scale(cross(groundNormal, rock.v), 1 / rock.r);
+      integrateRotation(rock, dt);
+      // Rock against marbles: the rock is several times heavier.
+      for (const m of marbles) {
+        const d = sub(m.p, rock.p);
+        const reach = R + rock.r;
+        const dist2 = dot(d, d);
+        if (dist2 >= reach * reach || dist2 === 0) continue;
+        const dist = Math.sqrt(dist2);
+        const n = scale(d, 1 / dist);
+        const mr = rock.mass, mm = 1, total = mr + mm;
+        const overlap = reach - dist;
+        m.p = madd(m.p, n, overlap * mr / total);
+        rock.p = madd(rock.p, n, -overlap * mm / total);
+        const vn = dot(sub(m.v, rock.v), n);
+        if (vn < 0) {
+          const j = -(1 + 0.4) * vn / (1 / mm + 1 / mr);
+          m.v = madd(m.v, n, j / mm);
+          rock.v = madd(rock.v, n, -j / mr);
+          if (-vn > 2.5 && !rock.hit.has(m.id)) {
+            rock.hit.add(m.id);
+            race.events.push({ type: "rockhit", marble: m.id, speed: -vn });
+          }
+        }
+      }
+    }
+  }
+
+  function spawnRock(race) {
+    const course = race.course;
+    const candidates = race.marbles.filter(m => !m.finished);
+    if (!candidates.length) return;
+    const target = candidates[Math.floor(race.random() * candidates.length)];
+    const progress = Math.max(5, Math.min(course.finishProgress - 4, target.progress + 7 + race.random() * 12));
+    const at = pointAt(course, progress);
+    const right = [-at.dir[2], 0, at.dir[0]];
+    const p = madd(at.p, right, (race.random() - 0.5) * 2.4);
+    p[1] = course.ceilingHeight(p[0], p[2]) - 0.8;
+    const r = 0.32 + race.random() * 0.14;
+    race.rocks.push({
+      id: ++race.rockCount || (race.rockCount = 1), p, v: [0, -1, 0], r, mass: 6 * Math.pow(r / 0.4, 3),
+      q: [0, 0, 0, 1], spin: [0, 0, 0], age: 0, still: 0, landed: false, hit: new Set()
+    });
+    race.events.push({ type: "rockfall", p: p.slice(), r });
+  }
+
+  // Spawns and retires falling rocks (lava world only).
+  function updateRocks(race, frameDt) {
+    const course = race.course;
+    if (!course.lavaHeight) return;
+    const elapsed = race.time - race.startTime;
+    if (race.state === "running" && elapsed > race.nextRockAt) {
+      race.nextRockAt = elapsed + 1.8 + race.random() * 2.2;
+      if (race.rocks.length < MAX_ROCKS) spawnRock(race);
+    }
+    race.rocks = race.rocks.filter(rock => {
+      rock.age += frameDt;
+      if (rock.p[1] < course.lavaHeight(rock.p[0], rock.p[2]) + 0.1) {
+        race.events.push({ type: "rocksink", p: rock.p.slice() });
+        return false;
+      }
+      rock.still = rock.landed && len(rock.v) < 0.4 ? rock.still + frameDt : 0;
+      if (rock.age > 14 || rock.still > 2) {
+        race.events.push({ type: "rockcrumble", p: rock.p.slice(), r: rock.r });
+        return false;
+      }
+      return true;
+    });
   }
 
   function integrateRotation(m, dt) {
@@ -868,6 +1044,7 @@
     }
     const course = race.course;
     const elapsed = race.time - race.startTime;
+    updateRocks(race, frameDt);
     for (const m of race.marbles) {
       if (m.parked) continue;
       updateProgress(race, m);
@@ -881,6 +1058,11 @@
         race.events.push({ type: "finish", marble: m.id, place: m.place, time: elapsed });
       }
       if (m.finished) continue;
+      // Into the lava river?
+      if (course.lavaHeight && m.p[1] < course.lavaHeight(m.p[0], m.p[2]) + 0.15) {
+        respawn(race, m, "lava");
+        continue;
+      }
       // Fell off the course?
       const cp = course.checkpoints[m.checkpoint];
       const hit = projectProgress(course, m.p, m.pathIndex);
@@ -925,7 +1107,7 @@
   const api = {
     R, W, DT, MARBLES, MODULE_TYPES, MODULE_LABELS, WORLDS,
     createRng, buildCourse, createRace, startCountdown, update, standings,
-    projectProgress, collide, floorBelow, makeFrame
+    projectProgress, collide, floorBelow, makeFrame, pointAt, LAVA_DEPTH, CAVE_HEIGHT
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.MarbleRace = api;
