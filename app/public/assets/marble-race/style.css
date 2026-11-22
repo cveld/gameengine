@@ -88,7 +88,7 @@ button.primary:hover { filter: brightness(1.05); }
 .cams button { border-radius: 0; margin-left: -1px; }
 .cams button:first-child { border-radius: 8px 0 0 8px; margin-left: 0; }
 .cams button:last-child { border-radius: 0 8px 8px 0; }
-.cams button[aria-pressed="true"], #sound[aria-pressed="true"], #fullscreen[aria-pressed="true"] {
+.cams button[aria-pressed="true"], #sound[aria-pressed="true"], #music[aria-pressed="true"], #fullscreen[aria-pressed="true"] {
   background: var(--ink);
   border-color: var(--ink);
   color: #fff;

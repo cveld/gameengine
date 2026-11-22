@@ -85,18 +85,20 @@
         if (master && ctx) master.gain.setTargetAtTime(on ? 0.7 : 0, ctx.currentTime, 0.05);
       },
       get enabled() { return enabled; },
+      /** The AudioContext, once unlocked (shared with the music). */
+      get context() { return ctx; },
       count(final) {
         if (!ctx) return;
         tone(final ? 880 : 440, ctx.currentTime, final ? 0.6 : 0.25, "square", 0.08);
       },
+      // Marbles touching: only hard hits, as a soft low "tock", at most a few per second.
       clack(strength) {
-        if (!ctx || !enabled) return;
+        if (!ctx || !enabled || strength < 2.2) return;
         const now = ctx.currentTime;
-        if (now - lastClack < 0.035) return;
+        if (now - lastClack < 0.18) return;
         lastClack = now;
-        const v = Math.min(0.22, 0.03 + strength * 0.03);
-        tone(2400 + Math.random() * 900, now, 0.05, "sine", v);
-        tone(4100 + Math.random() * 600, now, 0.03, "triangle", v * 0.5);
+        const v = Math.min(0.05, 0.012 + (strength - 2.2) * 0.01);
+        tone(620 + Math.random() * 160, now, 0.06, "sine", v);
       },
       thump(strength) {
         if (!ctx || !enabled) return;
@@ -161,7 +163,7 @@
       },
       rumble(speed) {
         if (!rumbleGain || !ctx) return;
-        rumbleGain.gain.setTargetAtTime(Math.min(0.35, speed * 0.035), ctx.currentTime, 0.1);
+        rumbleGain.gain.setTargetAtTime(Math.min(0.12, speed * 0.012), ctx.currentTime, 0.1);
       }
     };
   }

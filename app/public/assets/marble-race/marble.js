@@ -16,6 +16,26 @@
     return;
   }
   const sound = window.MarbleSound.createSound();
+
+  // ---------- music ----------
+  // The techno track follows the race: lobby groove, build-up in the countdown,
+  // the full track while racing, an open outro after the finish.
+  let music = null;
+  let musicOn = storageGet("marble-race:music") !== "off";
+  function musicSection() {
+    return phase === "lobby" ? "lobby" : phase === "countdown" ? "build" : phase === "running" ? "race" : "outro";
+  }
+  function syncMusic() {
+    const button = $("music");
+    button.setAttribute("aria-pressed", String(musicOn));
+    button.textContent = musicOn ? "Music on" : "Music off";
+    if (!musicOn || remote) { if (music) music.stop(); return; }
+    if (!music && sound.context && window.MarbleMusic) music = window.MarbleMusic.createMusic(sound.context);
+    if (!music) return; // starts once audio is unlocked by a click
+    music.setWorld(world);
+    music.setSection(musicSection());
+    music.start();
+  }
   const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const randomSeed = () => 1 + Math.floor(Math.random() * 9999);
 
@@ -95,6 +115,7 @@
     $("countdown").textContent = "";
     $("clock").textContent = formatTime(0);
     $("section").textContent = course.sections[0].label;
+    syncMusic();
     notify();
   }
 
@@ -125,8 +146,10 @@
   function startRace() {
     if (phase !== "lobby") return;
     sound.unlock();
+    syncMusic();
     $("lobby").hidden = true;
     phase = "countdown";
+    syncMusic();
     Race.startCountdown(race);
     showCount("3");
     sound.count(false);
@@ -383,6 +406,7 @@
           break;
         case "go":
           phase = "running";
+          syncMusic();
           showCount("GO!");
           sound.count(true);
           setTimeout(() => { if (phase === "running") { $("countdown").textContent = ""; notify(); } }, 900);
@@ -486,6 +510,7 @@
 
   function showResults() {
     phase = "results";
+    syncMusic();
     $("skip").hidden = true;
     timeScale = 1;
     const mine = renderResults(standingEntries());
@@ -657,6 +682,22 @@
     button.textContent = on ? "Sound on" : "Sound off";
   }
   $("sound").addEventListener("click", toggleSound);
+  function toggleMusic() {
+    musicOn = !musicOn;
+    storageSet("marble-race:music", musicOn ? "on" : "off");
+    if (musicOn) sound.unlock();
+    syncMusic();
+  }
+  $("music").addEventListener("click", toggleMusic);
+  // Any first click or key unlocks audio, so the lobby groove can start.
+  const firstGesture = () => {
+    sound.unlock();
+    syncMusic();
+    window.removeEventListener("pointerdown", firstGesture);
+    window.removeEventListener("keydown", firstGesture);
+  };
+  window.addEventListener("pointerdown", firstGesture);
+  window.addEventListener("keydown", firstGesture);
 
   // ---------- fullscreen ----------
   // Native fullscreen where the browser allows it (Android, desktop, iPad);
@@ -718,7 +759,8 @@
     if (e.key === "1") document.querySelector('[data-cam="leader"]').click();
     else if (e.key === "2") document.querySelector('[data-cam="pick"]').click();
     else if (e.key === "3") document.querySelector('[data-cam="overview"]').click();
-    else if (e.key === "m" || e.key === "M") toggleSound();
+    else if (e.key === "m" || e.key === "M") toggleMusic();
+    else if (e.key === "s" || e.key === "S") toggleSound();
     else if (e.key === "f" || e.key === "F") toggleFullscreen();
     else if (e.key === "Escape" && pseudoFullscreen) setPseudo(false);
   });
@@ -777,7 +819,7 @@
     onChange(fn) { listeners.add(fn); },
     // TV side: run a command from a phone.
     command(action, extra = {}) {
-      if (action === "start" || action === "again") sound.unlock();
+      if (action === "start" || action === "again") { sound.unlock(); syncMusic(); }
       command(action, extra);
       notify();
     },
@@ -790,6 +832,7 @@
     // Phone side: start or stop remote control (null stops it).
     setRemote(controller, deviceName) {
       remote = controller;
+      syncMusic();
       root.classList.toggle("remote", !!controller);
       $("cast-target").textContent = deviceName ? `Casting to ${deviceName}` : "Casting";
       if (!controller) {
