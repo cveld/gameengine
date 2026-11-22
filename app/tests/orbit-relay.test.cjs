@@ -53,7 +53,10 @@ test("AES-GCM roundtrips without plaintext/key leakage and rejects tampered/wron
   assert.equal(JSON.parse(decoded.report).attempt.handSample.validHands, 1);
   const wrong = await protocol.createReportCodec("34".repeat(16));
   await assert.rejects(wrong.open(encrypted));
-  await assert.rejects(codec.open({ ...encrypted, data: "A" + encrypted.data.slice(1) }));
+  // Always change the first character: replacing it with a fixed "A" was a no-op
+  // whenever the random ciphertext already started with "A" (1 in 64 runs).
+  const tampered = (encrypted.data[0] === "A" ? "B" : "A") + encrypted.data.slice(1);
+  await assert.rejects(codec.open({ ...encrypted, data: tampered }));
   await assert.rejects(codec.open({ ...encrypted, iv: "AAA=" }));
   await assert.rejects(codec.open({ ...encrypted, data: "x".repeat(30001) }));
 });
