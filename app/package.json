@@ -10,7 +10,7 @@
     "build": "vite build && node scripts/stamp-build.cjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/build-version.test.cjs tests/marble-race.test.cjs tests/orbit-catch-board-music.test.cjs tests/orbit-catch-body.test.cjs tests/orbit-catch-game.test.cjs tests/orbit-geometry.test.cjs tests/orbit-relay.test.cjs tests/orbit-sound.test.cjs tests/orbit-xr-diagnostics.test.cjs tests/orbit-xr-hands.test.cjs tests/orbit-xr-math.test.cjs",
+    "test": "node --test tests/build-version.test.cjs tests/marble-race.test.cjs tests/marble-race-music.test.cjs tests/orbit-catch-board-music.test.cjs tests/orbit-catch-body.test.cjs tests/orbit-catch-game.test.cjs tests/orbit-geometry.test.cjs tests/orbit-relay.test.cjs tests/orbit-sound.test.cjs tests/orbit-xr-diagnostics.test.cjs tests/orbit-xr-hands.test.cjs tests/orbit-xr-math.test.cjs",
     "test:browser": "node --test tests/site.test.cjs tests/orbit-browser.test.cjs tests/orbit-xr.test.cjs tests/orbit-wireless.test.cjs"
   },
   "dependencies": {

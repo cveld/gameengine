@@ -129,6 +129,20 @@ The asset is self-contained (no CDN, dependencies, network calls or telemetry):
     living 14 s (`rockcrumble`). Sounds: rumble, thump, sizzle, crumble.
   - Simulated lava races: winners after about 27–41 s, usually all marbles
     finish, around 20 rocks per race.
+- Music and sound (November 22, 2026, on request: the marble sounds were
+  annoying, add a pounding techno track). `music.js` synthesizes techno at
+  132 BPM (Web Audio, no files): kick with the bass ducking on it, rolling bass
+  on the 16ths between kicks, claps on 2 and 4, 16th hats, rides and an acid
+  line through soft clipping and a delay. Sections follow the race: a quiet,
+  filtered lobby groove, a build-up with doubling kicks and a noise riser in
+  the countdown, the full track from "GO" (two-bar breakdown every 16 bars),
+  a calmer outro after the results. Lava cave plays it in F# minor, meadow in
+  A minor. The **Music** button (key M) is separate from **Sound** (key S)
+  and is remembered in `localStorage`; audio starts on the first click. While
+  casting, the TV plays the music and the phone stays silent. Marble
+  collisions are now a soft low "tock", only for hard hits and at most about
+  five per second; the rolling rumble is quieter. `pattern()` is tested in
+  `tests/marble-race-music.test.cjs`.
 - Chromecast (added November 20, 2026 on request). Google Cast with a custom
   Web Receiver; the TV runs the race, phones are remote controls.
   - Receiver: `index.html?tv=1` (class `tv`: no controls, larger type, overscan
